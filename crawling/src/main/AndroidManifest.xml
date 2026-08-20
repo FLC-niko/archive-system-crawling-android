@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    package="com.topviewclub.crawling.core">
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+
+    <application>
+        <activity
+            android:name=".ui.ACVideoDetailsActivity"
+            android:exported="false">
+        </activity>
+        <activity
+            android:name=".ui.ACLimitedListActivity"
+            android:exported="false">
+        </activity>
+        <activity
+            android:name=".ui.ACVideoListActivity"
+            android:exported="false">
+        </activity>
+
+        <receiver
+            android:name="com.topviewclub.crawling.core.broadcast.CrawlingBroadcast"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.topviewclub.crawling.broadcast.START_AAOS" />
+                <action android:name="com.topviewclub.crawling.broadcast.UPDATE_IMAGE" />
+                <action android:name="com.topviewclub.crawling.broadcast.RESET" />
+                <action android:name="com.topviewclub.crawling.broadcast.IP" />
+                <action android:name="com.topviewclub.crawling.broadcast.TASK_TAG" />
+                <action android:name="com.topviewclub.crawling.broadcast.TARGET" />
+                <action android:name="com.topviewclub.crawling.broadcast.START_DATE" />
+                <action android:name="com.topviewclub.crawling.broadcast.END_DATE" />
+                <action android:name="com.topviewclub.crawling.broadcast.START_CRAWLING" />
+                <action android:name="com.topviewclub.crawling.broadcast.CLEAR_WECHAT_CACHE" />
+                <action android:name="com.topviewclub.crawling.broadcast.REQUIRE_VIDEO" />
+            </intent-filter>
+        </receiver>
+    </application>
+
+</manifest>

@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Crawling</string>
+    <string name="check_qrcode_operation_service">检查 { 微信二维码是否有效 } 的无障碍服务</string>
+</resources>
