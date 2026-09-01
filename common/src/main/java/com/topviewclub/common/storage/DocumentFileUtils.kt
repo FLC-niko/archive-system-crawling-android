@@ -15,6 +15,12 @@ object DocumentFileUtils {
 
     //获取指定目录的权限
     fun startForPermission(path: String, context: Activity) {
+        require(
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.R ||
+                !path.contains("/Android/data/"),
+        ) {
+            "Android 11+ 不允许通过 ACTION_OPEN_DOCUMENT_TREE 授权 Android/data 子目录"
+        }
         val uri = changeToUriInternal(path)
         val parse = Uri.parse(uri)
         val intent = Intent("android.intent.action.OPEN_DOCUMENT_TREE")

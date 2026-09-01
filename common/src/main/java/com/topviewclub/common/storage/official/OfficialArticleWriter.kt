@@ -10,7 +10,9 @@ import com.topviewclub.common.bean.ServerData
 import com.topviewclub.common.bean.ServerStatusType
 import com.topviewclub.common.log.logI
 import com.topviewclub.common.log.logRabbit
+import com.topviewclub.common.mq.AtdError
 import com.topviewclub.common.mq.RabbitMQClient
+import com.topviewclub.common.mq.SeedArticle
 import com.topviewclub.common.mq.room.addGzhCorrelationData
 import com.topviewclub.common.mq.room.addVideoCorrelationData
 import com.topviewclub.common.util.AnalysisJson
@@ -18,6 +20,7 @@ import com.topviewclub.common.util.defaultOutputDirectory
 import com.topviewclub.common.util.getCurrentTime
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
@@ -26,6 +29,8 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 object OfficialArticleWriter {
+
+    private val rabbitScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     fun writeOfficialArticleSet(articles: Set<OfficialArticle>, tag: String) {
         val file = File(appContext.defaultOutputDirectory(), "official_${tag}.txt")
@@ -41,6 +46,11 @@ object OfficialArticleWriter {
 
     @RequiresApi(Build.VERSION_CODES.O)
     fun sendOfficialArticleSetToBigData(articles: Set<OfficialArticle>, aaosTask: AAOSTask) {
+        if (aaosTask.rabbitTaskContext != null) {
+            sendRabbitArticles(articles, aaosTask)
+            return
+        }
+
         val articleToBigData : MutableList<GzhAutoToBigData> = mutableListOf()
 
         articles.forEach {
@@ -106,6 +116,49 @@ object OfficialArticleWriter {
 
 
 
+    }
+
+    /**
+     * RabbitMQ V2 任务只发布一条聚合 ATD；无效/空 URL 不会污染结果。
+     * 发布协程失败时会让 RabbitTaskContext.completion 失败，消费者因此不会 ACK 原 BTA。
+     */
+    private fun sendRabbitArticles(articles: Set<OfficialArticle>, aaosTask: AAOSTask) {
+        val context = aaosTask.rabbitTaskContext ?: return
+        val seedArticles = articles.asSequence()
+            .map { it.url.trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+            .map { SeedArticle(url = it) }
+            .toList()
+        rabbitScope.launch {
+            runCatching {
+                context.publishTerminal(
+                    status = if (seedArticles.isEmpty()) "EMPTY" else "SUCCEEDED",
+                    seedArticles = seedArticles,
+                )
+            }.onFailure {
+                logRabbit("V2 ATD 发布失败: ${it.message}")
+            }
+        }
+    }
+
+    /** RabbitMQ V2 任务的服务级失败终态。 */
+    fun sendRabbitFailure(aaosTask: AAOSTask, code: String, message: String = code) {
+        val context = aaosTask.rabbitTaskContext ?: return
+        rabbitScope.launch {
+            runCatching {
+                context.publishTerminal(
+                    status = "FAILED",
+                    error = AtdError(
+                        code = code,
+                        message = message,
+                        retryable = true,
+                    ),
+                )
+            }.onFailure {
+                logRabbit("V2 FAILED ATD 发布失败: ${it.message}")
+            }
+        }
     }
 
 }

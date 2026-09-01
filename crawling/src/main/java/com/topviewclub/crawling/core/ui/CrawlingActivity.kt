@@ -93,7 +93,11 @@ class CrawlingActivity : AppCompatActivity() {
             }
 
             btnSystemPermission.setOnClickListener {
-                requestPermissions.launch(permissions21)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    requestFileAccess()
+                } else {
+                    requestPermissions.launch(permissions21)
+                }
             }
 
             btnShizukuPermission.setOnClickListener {
@@ -140,22 +144,28 @@ class CrawlingActivity : AppCompatActivity() {
     }
 
     private fun requestFileAccess() {
-        //判断是否需要所有文件权限
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) /*while (true)*/
-        // 检查权限
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             if (Environment.isExternalStorageManager()) {
-                toast("请授权所有文件管理权限")
-                val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
-                startActivity(intent)
-            } else {
-                toast("请授权微信缓存文件夹管理权限")
-                // 申请使用文件夹
-                DocumentFileUtils.startForPermission(WECHAT_CACHE_FOLDER, this)
+                toast("已获得共享文件权限；Android 11+ 仍禁止授权微信 Android/data，公众号采集可直接继续")
+                return
             }
-        else {
-            toast("请授权微信缓存文件夹管理权限")
-            DocumentFileUtils.startForPermission(WECHAT_CACHE_FOLDER, this)
+
+            toast("Android 11+ 无法在文件选择器授权微信 Android/data；此权限不影响公众号采集")
+            runCatching {
+                startActivity(
+                    Intent(
+                        Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                        Uri.parse("package:$packageName"),
+                    ),
+                )
+            }.onFailure {
+                startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+            }
+            return
         }
+
+        toast("请授权微信缓存文件夹管理权限")
+        DocumentFileUtils.startForPermission(WECHAT_CACHE_FOLDER, this)
     }
 
     //返回授权状态

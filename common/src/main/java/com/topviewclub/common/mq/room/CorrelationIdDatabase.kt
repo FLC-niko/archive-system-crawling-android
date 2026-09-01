@@ -3,10 +3,14 @@ package com.topviewclub.common.mq.room
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.topviewclub.common.base.appContext
 import com.topviewclub.common.log.logRabbit
 import com.topviewclub.common.mq.room.gzh.GzhConsumerDao
 import com.topviewclub.common.mq.room.gzh.GzhData
+import com.topviewclub.common.mq.room.rabbit.RabbitInbox
+import com.topviewclub.common.mq.room.rabbit.RabbitInboxDao
 import com.topviewclub.common.mq.room.single.SingleVideoConsumerDao
 import com.topviewclub.common.mq.room.single.SingleVideoData
 import com.topviewclub.common.mq.room.total.PickupDao
@@ -31,17 +35,24 @@ val videoDao: VideoConsumerDao get() = correlationDataBase.videoConsumerDao()
 val singleVideoDao: SingleVideoConsumerDao get() = correlationDataBase.singleVideoConsumerDao()
 val pickupDao: PickupDao get() = correlationDataBase.pickupDao()
 
-private const val DATA_BASE_VERSION = 1
+private const val DATA_BASE_VERSION = 2
 private const val DATA_BAST_NAME = "correlationIdDB"
 
-private val correlationDataBase by lazy {
+internal val correlationDataBase by lazy {
     Room.databaseBuilder(appContext, CorrelationDataBase::class.java, DATA_BAST_NAME)
         .allowMainThreadQueries()
+        .addMigrations(MIGRATION_1_2)
         .build()
 }
 
 @Database(
-    entities = [GzhData::class, VideoData::class, SingleVideoData::class,PickupData::class],
+    entities = [
+        GzhData::class,
+        VideoData::class,
+        SingleVideoData::class,
+        PickupData::class,
+        RabbitInbox::class,
+    ],
     version = DATA_BASE_VERSION
 )
 abstract class CorrelationDataBase : RoomDatabase() {
@@ -54,6 +65,35 @@ abstract class CorrelationDataBase : RoomDatabase() {
 
     abstract fun pickupDao(): PickupDao
 
+    abstract fun rabbitInboxDao(): RabbitInboxDao
+
+}
+
+private val MIGRATION_1_2 = object : Migration(1, 2) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS rabbitInbox (
+                idempotencyKey TEXT NOT NULL,
+                eventId TEXT NOT NULL,
+                workflowId TEXT NOT NULL,
+                resultEventId TEXT NOT NULL,
+                status TEXT NOT NULL,
+                attempt INTEGER NOT NULL,
+                receivedAt INTEGER NOT NULL,
+                updatedAt INTEGER NOT NULL,
+                lastError TEXT,
+                PRIMARY KEY(idempotencyKey)
+            )
+            """.trimIndent()
+        )
+        database.execSQL(
+            "CREATE INDEX IF NOT EXISTS index_rabbitInbox_status ON rabbitInbox(status)"
+        )
+        database.execSQL(
+            "CREATE INDEX IF NOT EXISTS index_rabbitInbox_updatedAt ON rabbitInbox(updatedAt)"
+        )
+    }
 }
 
 

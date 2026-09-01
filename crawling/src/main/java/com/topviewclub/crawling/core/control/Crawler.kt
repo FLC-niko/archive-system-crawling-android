@@ -2,6 +2,7 @@ package com.topviewclub.crawling.core.control
 
 import android.provider.Settings
 import com.topviewclub.common.base.appContext
+import com.topviewclub.common.mq.RabbitTaskContext
 
 internal abstract class Crawler {
 
@@ -18,7 +19,13 @@ internal abstract class Crawler {
      * @param startDate 起始日期
      * @param endDate 终止日期
      * */
-    abstract fun startCrawling(target: String?, tag: String?, startDate: Long, endDate: Long)
+    abstract fun startCrawling(
+        target: String?,
+        tag: String?,
+        startDate: Long,
+        endDate: Long,
+        rabbitTaskContext: RabbitTaskContext? = null,
+    )
 
     /**
      * 根据给定的无障碍服务 [serviceClassName] ，启动无障碍服务

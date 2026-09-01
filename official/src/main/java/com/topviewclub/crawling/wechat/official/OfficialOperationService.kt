@@ -3,9 +3,11 @@ package com.topviewclub.crawling.wechat.official
 import com.topviewclub.common.bean.AAOSTask
 import com.topviewclub.common.bean.TaskCrawlingType
 import com.topviewclub.common.bean.TaskResultType
+import com.topviewclub.common.mq.RabbitTaskContext
+import com.topviewclub.common.storage.official.OfficialArticleWriter
+import com.topviewclub.crawling.service.ServiceResult
 import com.topviewclub.crawling.service.action.ActionException
 import com.topviewclub.crawling.service.wechat.WechatOperationService
-import com.topviewclub.crawling.service.wechat.check.CheckQRCodeOperationService
 import com.topviewclub.crawling.wechat.official.action.*
 
 class OfficialOperationService : WechatOperationService() {
@@ -15,6 +17,7 @@ class OfficialOperationService : WechatOperationService() {
         private var targetStartDate = Long.MIN_VALUE
         private var targetEndDate: Long = Long.MAX_VALUE
         private var targetAccount: String? = null
+        private var preparedRabbitTaskContext: RabbitTaskContext? = null
 
         /**
          * 开启服务前调用此函数初始化参数
@@ -23,12 +26,14 @@ class OfficialOperationService : WechatOperationService() {
             serviceTag: String?,
             startDate: Long,
             endDate: Long,
-            account: String?
+            account: String?,
+            rabbitTaskContext: RabbitTaskContext? = null,
         ) {
             tag = serviceTag
             targetStartDate = startDate
             targetEndDate = endDate
             targetAccount = account
+            preparedRabbitTaskContext = rabbitTaskContext
             officialArticleSetInternal.clear()
 
         }
@@ -41,7 +46,8 @@ class OfficialOperationService : WechatOperationService() {
         tag,
         targetAccount,
         startDate,
-        endDate
+        endDate,
+        rabbitTaskContext = preparedRabbitTaskContext,
     )
 
     override val target: String
@@ -72,5 +78,35 @@ class OfficialOperationService : WechatOperationService() {
     override val startDate: Long get() = targetStartDate
 
     override val endDate: Long get() = targetEndDate
+
+    override fun onCreate() {
+        addOnServiceDestroyListener { result ->
+            when (result) {
+                is ServiceResult.Completed ->
+                    if (aaosTask.rabbitTaskContext != null) {
+                        // WriteOfficialArticle 已触发 V2 结果发布；这里仅保留幂等兜底。
+                        OfficialArticleWriter.sendOfficialArticleSetToBigData(
+                            officialArticleSetInternal,
+                            aaosTask,
+                        )
+                    }
+                is ServiceResult.Error ->
+                    OfficialArticleWriter.sendRabbitFailure(
+                        aaosTask,
+                        code = result.msg,
+                        message = "公众号抓取服务失败: ${result.msg}",
+                    )
+            }
+        }
+        super.onCreate()
+    }
+
+    override fun onUnexpectedServiceDestroy() {
+        OfficialArticleWriter.sendRabbitFailure(
+            aaosTask,
+            code = TaskResultType.SERVICE_DESTROY_UNEXPECTEDLY,
+            message = "公众号无障碍服务意外销毁",
+        )
+    }
 
 }

@@ -1,103 +1,175 @@
 package com.topviewclub.common.mq
 
-import android.os.Build
-import androidx.annotation.RequiresApi
+import com.topviewclub.common.bean.GzhAutoToBigData
+import com.topviewclub.common.log.logRabbit
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import java.util.concurrent.ConcurrentHashMap
 
+/**
+ * Android 端 RabbitMQ 入口。
+ *
+ * pro/test/thdag 保留旧 new-media-backend 拓扑兼容；xdag 使用 broker 已部署的
+ * archive.new-media.v2 / archive.new-media.retry.v2 拓扑，并同样消费 BTA、回传 ATD。
+ */
 object RabbitMQClient {
-    // Rabbit客户端管理器，便于注册和管理消费者，生产者
-    private var rabbitMQClientManager = RabbitMQClientManager()
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
+    private val managers = linkedMapOf(
+        VIRTUAL_HOST to RabbitMQClientManager(VIRTUAL_HOST, LEGACY_RABBIT_TOPOLOGY),
+        TEST_VIRTUAL_HOST to RabbitMQClientManager(TEST_VIRTUAL_HOST, LEGACY_RABBIT_TOPOLOGY),
+        XDAG_VIRTUAL_HOST to RabbitMQClientManager(XDAG_VIRTUAL_HOST, XDAG_RABBIT_TOPOLOGY),
+        THDAG_VIRTUAL_HOST to RabbitMQClientManager(THDAG_VIRTUAL_HOST, LEGACY_RABBIT_TOPOLOGY),
+    )
 
-    // 视频号的消费者
+    private val gzhConsumers = ConcurrentHashMap<String, RabbitMQClientManager.Consumer>()
+    private var supervisor: VhostConnectionSupervisor? = null
+    private var started = false
+
+    // 旧调用方兼容字段；新公众号链路不依赖这些全局变量。
+    var videoCorrelationId: String? = " "
+    var gzhCorrelationId: String? = " "
+    var gzhQueueName: String? = " "
+
     var consumerVideoFromBackend: RabbitMQClientManager.Consumer? = null
-
-    // 单个视频消费者
     var consumerSingleVideoFromBackend: RabbitMQClientManager.Consumer? = null
-
-    // 公众号消费者
     var consumerGzhFromBackend: RabbitMQClientManager.Consumer? = null
 
-    // 公众号生产者
     var producerGzhToBigData: RabbitMQClientManager.Producer? = null
-
-    // 视频号生产者
     var producerVideoToBackend: RabbitMQClientManager.Producer? = null
-    //单个视频生产者
     var producerSingleVideoToBackend: RabbitMQClientManager.Producer? = null
+    var producerStatusToServer: RabbitMQClientManager.Producer? = null
 
+    @Synchronized
+    private fun ensureStarted() {
+        if (started) return
+        started = true
 
-    // 注册中心状态回报生产者
-    var producerStatusToServer :RabbitMQClientManager.Producer? = null
+        if (PASSWORD.isBlank()) {
+            logRabbit("未注入 RABBITMQ_PASSWORD，跳过 RabbitMQ 连接；请使用 -PRABBITMQ_PASSWORD=... 构建")
+            return
+        }
 
-    // 暴露给外部的全局变量，用于监听每条信息的唯一表示，便于去重，但是实现的很丑陋
-    var videoCorrelationId:String? = " "
-    var gzhCorrelationId:String? = " "
-    var gzhQueueName:String? = " "
-
-
-    @RequiresApi(Build.VERSION_CODES.O)
-    fun prepareRabbitProducer( ) {
-        // 完成对公众号的初始化
-        producerGzhToBigData = rabbitMQClientManager.registerProducer(
-            "new-media-backend",
-            "direct",
-            "gzh-auto-ATD-routing",
-            "gzh-auto-ATD-queue"
-        )
-//        producerVideoToBackend = rabbitMQClientManager.registerProducer(
-//            "new-media-backend",
-//            "direct",
-//            "video-auto-ATB-routing",
-//            "video-auto-ATB-queue"
-//        )
-//        producerSingleVideoToBackend = rabbitMQClientManager.registerProducer(
-//            "new-media-backend",
-//            "direct",
-//            "video-single-ATB-routing",
-//            "video-single-ATB-queue"
-//        )
-
-        // 完成对注册中心状态回报的生产者初始化
-        producerStatusToServer = rabbitMQClientManager.registerProducer(
-            "server-exchange",
-            "direct",
-            "server-routing",
-            "server.queue.provideLog",
-        )
-
-
+        supervisor = VhostConnectionSupervisor(
+            bindings = managers.map { (vhost, manager) ->
+                VhostConnectionSupervisor.VhostBinding(
+                    name = vhost,
+                    virtualHost = vhost,
+                    manager = manager,
+                )
+            },
+            initialRetryIntervalMs = RECONNECT_INITIAL_DELAY_MS,
+            maxRetryIntervalMs = RECONNECT_MAX_DELAY_MS,
+        ).also { it.start(scope) }
+        logRabbit("RabbitMQ supervisor 已启动: ${managers.keys}")
     }
 
+    private fun managerFor(virtualHost: String): RabbitMQClientManager =
+        managers[virtualHost]
+            ?: throw IllegalArgumentException("未知 RabbitMQ vhost: $virtualHost")
+
+    /** 新公众号结果发布器：必须传入接收任务的同一 vhost。 */
+    fun resultPublisher(virtualHost: String, resultEventId: String): RabbitResultPublisher =
+        RabbitResultPublisher(managerFor(virtualHost), resultEventId)
+
+    /**
+     * 旧版 BTA 必须继续向原 vhost 的旧 ATD 队列发布 List<GzhAutoToBigData>，不能把
+     * archive.rabbit.v2 envelope 混入旧队列。超过 20 条时保持原实现的二段发布行为。
+     */
+    suspend fun publishLegacyGzhResult(
+        virtualHost: String,
+        articles: List<GzhAutoToBigData>,
+    ) {
+        val manager = managerFor(virtualHost)
+        if (articles.size <= 20) {
+            manager.publishJson(manager.resultQueue, articles)
+            return
+        }
+
+        val middle = articles.size / 2
+        manager.publishJson(manager.resultQueue, articles.subList(0, middle))
+        manager.publishJson(manager.resultQueue, articles.subList(middle, articles.size))
+    }
+
+    /** 初始化旧版 producer 字段，保留视频/状态接口兼容。 */
+    fun prepareRabbitProducer() {
+        ensureStarted()
+        val manager = managerFor(VIRTUAL_HOST)
+        producerGzhToBigData = manager.registerProducer(
+            NEW_MEDIA_EXCHANGE,
+            NEW_MEDIA_EXCHANGE_TYPE,
+            GZH_ATD_ROUTING_KEY,
+            GZH_ATD_QUEUE,
+        )
+        producerStatusToServer = manager.registerProducer(
+            "",
+            NEW_MEDIA_EXCHANGE_TYPE,
+            SERVER_STATUS_QUEUE,
+            SERVER_STATUS_QUEUE,
+        )
+    }
+
+    /**
+     * 注册 V2/legacy 公众号消费者到所有已配置 vhost。每个回调都收到自己的
+     * DeliveryContext，回调正常返回后 manager 才会 ACK。
+     */
+    fun prepareGzhAutoConsumer(
+        onMessageReceive: suspend (String, RabbitMQClientManager.DeliveryContext) -> Unit,
+    ) {
+        ensureStarted()
+        managers.forEach { (vhost, manager) ->
+            val topology = rabbitTopologyFor(vhost)
+            val consumer = manager.registerConsumer(
+                exchangeName = topology.exchange,
+                exchangeType = topology.exchangeType,
+                routingKey = topology.taskRoutingKey,
+                queueName = topology.taskQueue,
+                prefetch = 1,
+                onMessageReceived = onMessageReceive,
+            )
+            gzhConsumers[vhost] = consumer
+        }
+        consumerGzhFromBackend = gzhConsumers[VIRTUAL_HOST]
+    }
+
+    /** 旧版单参数回调兼容入口。 */
+    fun prepareGzhAutoConsumer(onMessageReceive: (String) -> Unit) {
+        prepareGzhAutoConsumer { body, _ -> onMessageReceive(body) }
+    }
+
+    // 以下视频接口暂时继续使用 pro vhost 的旧拓扑，避免影响已有手动视频流程。
     fun prepareVideoAutoConsumer(onMessageReceive: (String) -> Unit) {
-        consumerVideoFromBackend = rabbitMQClientManager.registerConsumer(
-            "new-media-backend",
-            "direct",
+        ensureStarted()
+        val topology = LEGACY_RABBIT_TOPOLOGY
+        consumerVideoFromBackend = managerFor(VIRTUAL_HOST).registerConsumer(
+            topology.exchange,
+            topology.exchangeType,
             "video-auto-BTA-routing",
             "video-auto-BTA-queue",
-            onMessageReceive
+            onMessageReceive,
         )
     }
 
     fun prepareVideoSingleConsumer(onMessageReceive: (String) -> Unit) {
-        consumerSingleVideoFromBackend = rabbitMQClientManager.registerConsumer(
-            "new-media-backend",
-            "direct",
+        ensureStarted()
+        val topology = LEGACY_RABBIT_TOPOLOGY
+        consumerSingleVideoFromBackend = managerFor(VIRTUAL_HOST).registerConsumer(
+            topology.exchange,
+            topology.exchangeType,
             "video-single-BTA-routing",
             "video-single-BTA-queue",
-            onMessageReceive
+            onMessageReceive,
         )
     }
 
-    fun prepareGzhAutoConsumer(onMessageReceive: (String) -> Unit) {
-        consumerGzhFromBackend = rabbitMQClientManager.registerConsumer(
-            "new-media-backend",
-            "direct",
-            "gzh-auto-BTA-routing",
-            "gzh-auto-BTA-queue",
-            onMessageReceive
-        )
-    }
-    fun closeRabbitConfiguration(){
-        rabbitMQClientManager.close()
+    @Synchronized
+    fun closeRabbitConfiguration() {
+        supervisor?.stop()
+        supervisor = null
+        managers.values.forEach { it.close() }
+        gzhConsumers.clear()
+        consumerGzhFromBackend = null
+        started = false
     }
 }

@@ -1,6 +1,7 @@
 package com.topviewclub.crawling.core.control
 
 import com.topviewclub.common.base.appContext
+import com.topviewclub.common.mq.RabbitTaskContext
 import com.topviewclub.common.util.startXueXiActivity
 import com.topviewclub.crawling.xuexi.XueXiOperationService
 
@@ -15,21 +16,34 @@ internal abstract class AbstractXueXiCrawler : Crawler() {
         target: String?,
         tag: String?,
         startDate: Long,
-        endDate: Long
+        endDate: Long,
+        rabbitTaskContext: RabbitTaskContext?,
     ) {
-        initData(target, tag, startDate, endDate)
+        initData(target, tag, startDate, endDate, rabbitTaskContext)
         startAccessibilityService()
         appContext.startXueXiActivity()
     }
 
-    abstract fun initData(target: String?, tag: String?, startDate: Long, endDate: Long)
+    abstract fun initData(
+        target: String?,
+        tag: String?,
+        startDate: Long,
+        endDate: Long,
+        rabbitTaskContext: RabbitTaskContext?,
+    )
 }
 
 internal object XueXiCrawler : AbstractXueXiCrawler() {
     override val serviceClassName: String =
         "${appContext.packageName}/com.topviewclub.crawling.xuexi.XueXiOperationService"
 
-    override fun initData(target: String?, tag: String?, startDate: Long, endDate: Long) {
+    override fun initData(
+        target: String?,
+        tag: String?,
+        startDate: Long,
+        endDate: Long,
+        rabbitTaskContext: RabbitTaskContext?,
+    ) {
         XueXiOperationService.prepare(
             serviceTag = tag,
             startDate = startDate,

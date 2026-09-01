@@ -1,6 +1,7 @@
 package com.topviewclub.crawling.core.control
 
 import com.topviewclub.common.base.appContext
+import com.topviewclub.common.mq.RabbitTaskContext
 import com.topviewclub.common.util.startWechatScanActivity
 import com.topviewclub.crawling.service.wechat.check.CheckQRCodeOperationService
 import com.topviewclub.crawling.wechat.auto.AutoChatOperationService
@@ -21,14 +22,21 @@ internal abstract class AbstractWechatCrawler : Crawler() {
         target: String?,
         tag: String?,
         startDate: Long,
-        endDate: Long
+        endDate: Long,
+        rabbitTaskContext: RabbitTaskContext?,
     ) {
-        initData(target, tag, startDate, endDate)
+        initData(target, tag, startDate, endDate, rabbitTaskContext)
         startAccessibilityService()
         appContext.startWechatScanActivity()
     }
 
-    abstract fun initData(target: String?, tag: String?, startDate: Long, endDate: Long)
+    abstract fun initData(
+        target: String?,
+        tag: String?,
+        startDate: Long,
+        endDate: Long,
+        rabbitTaskContext: RabbitTaskContext?,
+    )
 }
 
 /**
@@ -38,12 +46,19 @@ internal object WechatOfficialCrawler : AbstractWechatCrawler() {
     override val serviceClassName =
         "${appContext.packageName}/com.topviewclub.crawling.wechat.official.OfficialOperationService"
 
-    override fun initData(target: String?, tag: String?, startDate: Long, endDate: Long) {
+    override fun initData(
+        target: String?,
+        tag: String?,
+        startDate: Long,
+        endDate: Long,
+        rabbitTaskContext: RabbitTaskContext?,
+    ) {
         OfficialOperationService.prepare(
             serviceTag = tag,
             startDate = startDate,
             endDate = endDate,
-            account = target
+            account = target,
+            rabbitTaskContext = rabbitTaskContext,
         )
     }
 }
@@ -55,7 +70,13 @@ internal object WechatVideoCrawler : AbstractWechatCrawler() {
     override val serviceClassName =
         "${appContext.packageName}/com.topviewclub.crawling.wechat.video.VideoOperationService"
 
-    override fun initData(target: String?, tag: String?, startDate: Long, endDate: Long) {
+    override fun initData(
+        target: String?,
+        tag: String?,
+        startDate: Long,
+        endDate: Long,
+        rabbitTaskContext: RabbitTaskContext?,
+    ) {
         VideoOperationService.prepare(
             serviceTag = tag,
             startDate = startDate,
@@ -71,7 +92,13 @@ internal object WechatAutoChatCrawler : AbstractWechatCrawler() {
     override val serviceClassName =
         "${appContext.packageName}/com.topviewclub.crawling.wechat.auto.AutoChatOperationService"
 
-    override fun initData(target: String?, tag: String?, startDate: Long, endDate: Long) {
+    override fun initData(
+        target: String?,
+        tag: String?,
+        startDate: Long,
+        endDate: Long,
+        rabbitTaskContext: RabbitTaskContext?,
+    ) {
         AutoChatOperationService.prepare(
             serviceTag = tag
         )
@@ -85,7 +112,13 @@ internal object WechatQRCodeCheckCrawler : AbstractWechatCrawler() {
     override val serviceClassName =
         "${appContext.packageName}/com.topviewclub.crawling.service.wechat.check.CheckQRCodeOperationService"
 
-    override fun initData(target: String?, tag: String?, startDate: Long, endDate: Long) {
+    override fun initData(
+        target: String?,
+        tag: String?,
+        startDate: Long,
+        endDate: Long,
+        rabbitTaskContext: RabbitTaskContext?,
+    ) {
         CheckQRCodeOperationService.prepare(
             serviceTag = tag,
             account = target

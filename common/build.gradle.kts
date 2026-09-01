@@ -6,6 +6,18 @@ plugins {
 
 }
 
+// RabbitMQ 密码只从构建参数或环境变量注入，不能落到源码或 gradle.properties。
+val rabbitMqPassword = providers.gradleProperty("RABBITMQ_PASSWORD")
+    .orElse(providers.environmentVariable("RABBITMQ_PASSWORD"))
+    .orElse("")
+    .get()
+
+fun quoteBuildConfigString(value: String): String =
+    "\"" + value
+        .replace("\\", "\\\\")
+        .replace("\"", "\\\"")
+        .replace("\n", "\\n") + "\""
+
 android {
     compileSdk = Build.compileSdk
 
@@ -15,6 +27,7 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")
+        buildConfigField("String", "RABBITMQ_PASSWORD", quoteBuildConfigString(rabbitMqPassword))
     }
 
     buildTypes {

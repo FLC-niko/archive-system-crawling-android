@@ -13,23 +13,57 @@ import com.topviewclub.common.log.logE
 import com.topviewclub.common.log.logI
 import com.topviewclub.common.log.logRabbit
 import com.topviewclub.common.mq.RabbitMQClient
+import com.topviewclub.common.mq.RabbitMQClientManager
+import com.topviewclub.common.mq.RabbitTaskContext
+import com.topviewclub.common.mq.RabbitTaskDecoder
+import com.topviewclub.common.mq.RabbitTaskMessage
+import com.topviewclub.common.mq.AtdError
+import com.topviewclub.common.mq.RabbitQrResolutionException
+import com.topviewclub.common.mq.buildLegacyGzhResults
+import com.topviewclub.common.mq.rabbitTaskPriorityFor
+import com.topviewclub.common.mq.resolveRabbitQrImage
 import com.topviewclub.common.mq.room.*
+import com.topviewclub.common.mq.room.rabbit.RabbitInboxStore
 import com.topviewclub.common.storage.deleteAllPhotos
 import com.topviewclub.common.storage.updateQR
 import com.topviewclub.common.util.AnalysisJson
 import com.topviewclub.common.util.className
 import com.topviewclub.common.util.getCurrentTime
 import com.topviewclub.crawling.wechat.auto.AutoChatOperationService
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
+import java.text.ParsePosition
 import java.util.*
+import java.util.concurrent.ConcurrentHashMap
 
 
 object TaskDispatcher {
 
     private val taskList = mutableListOf<AAOSTask>()
+    private val rabbitClaimMutex = Mutex()
+    private val activeRabbitTasks = ConcurrentHashMap<String, RabbitTaskContext>()
+
+    private val processingTaskListener: (AAOSTask) -> Unit = {
+        TaskStat.enqueuingTaskList.postValue(taskList.toMutableList())
+        if (it.type == TaskCrawlingType.TYPE_NOTHING) {
+            if (taskList.isNotEmpty()) {
+                taskList.removeAt(nextTaskIndex()).dispatch()
+            } else {
+                AutoChatTask().dispatch()
+            }
+        }
+    }
 
 
     @RequiresApi(Build.VERSION_CODES.O)
@@ -38,40 +72,8 @@ object TaskDispatcher {
 
         // 注册公众号，视频号，单个视频的生产者
         RabbitMQClient.prepareRabbitProducer()
-        // 注册公众号消费者，具体参数请看对接文档
-        RabbitMQClient.prepareGzhAutoConsumer {
-            val gzhDate = AnalysisJson.analysisGzhAutoFromBackend(it)
-            kotlin.runCatching {
-                val correlationId = gzhDao.selectCorrelationId(gzhDate!!.correlationId)
-                if (correlationId == null) {
-                    RabbitMQClient.gzhCorrelationId = gzhDate.correlationId
-                    RabbitMQClient.gzhQueueName = gzhDate.queueName
-                    generateAndEnqueueTask(
-                        TYPE_OFFICIAL,
-                        gzhDate.jobId.toString(),
-                        gzhDate.gzhName,
-                        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-                            .parse(gzhDate.tempTimeStamp[0])!!.time,
-                        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-                            .parse(gzhDate.tempTimeStamp[1])!!.time,
-                        gzhDate.image
-                    )
-                } else {
-                    logRabbit(
-                         "Gzh Repeat"
-                    )
-                    RabbitMQClient.consumerGzhFromBackend!!.ask()
-                }
-
-
-
-            }.onFailure {
-                logRabbit(
-                     "Gzh Exception" +
-                            "Cause = ${it.cause} , Message = ${it.message}"
-                )
-            }
-        }
+        // V2/legacy 公众号消费者：回调挂起直到 Android 抓取完成且 ATD 已 confirm。
+        RabbitMQClient.prepareGzhAutoConsumer(::handleRabbitGzhMessage)
 
 
 
@@ -161,16 +163,185 @@ object TaskDispatcher {
 
 
         TaskStat.startDate = Date()
-        TaskStat.addProcessingTaskListener {
-            TaskStat.enqueuingTaskList.postValue(taskList.toMutableList())
-            if (it.type == TaskCrawlingType.TYPE_NOTHING) {
-                if (taskList.isNotEmpty()) {
-                    taskList.removeFirst().dispatch()
+        TaskStat.addProcessingTaskListener(processingTaskListener)
+    }
+
+    /**
+     * 处理一条 RabbitMQ BTA。Room inbox 负责进程重启/重复投递幂等，completion 负责把
+     * broker ACK 推迟到 UI 抓取和 V2 ATD publisher confirm 之后。
+     */
+    private suspend fun handleRabbitGzhMessage(
+        body: String,
+        delivery: RabbitMQClientManager.DeliveryContext,
+    ) {
+        val message = RabbitTaskDecoder.decode(body.toByteArray(Charsets.UTF_8))
+        val input = message.asV2()
+        var ownsTask = false
+        val rabbitTaskContext = rabbitClaimMutex.withLock {
+            activeRabbitTasks[message.idempotencyKey]?.let { active ->
+                logRabbit("Rabbit redelivery waits for active task: ${message.idempotencyKey}")
+                return@withLock active
+            }
+
+            val claim = RabbitInboxStore.claim(
+                RabbitInboxStore.InboxMessage(
+                    idempotencyKey = message.idempotencyKey,
+                    eventId = message.eventId,
+                    workflowId = message.workflowId,
+                    allowProcessingTakeover = delivery.isRedeliver,
+                ),
+            )
+            if (!claim.claimed) {
+                logRabbit("Rabbit duplicate ignored: ${message.idempotencyKey}")
+                return@withLock null
+            }
+
+            val resultPublisher = RabbitMQClient.resultPublisher(
+                virtualHost = delivery.sourceVirtualHost,
+                resultEventId = claim.resultEventId,
+            )
+            val legacyTask = (message as? RabbitTaskMessage.Legacy)?.task
+            RabbitTaskContext(
+                input = input,
+                sourceVirtualHost = delivery.sourceVirtualHost,
+            ) { status, seedArticles, error ->
+                if (legacyTask != null) {
+                    check(status != "FAILED") {
+                        "Legacy 公众号任务失败，保留 BTA 重试: ${error?.code ?: "UNKNOWN"}"
+                    }
+                    val legacyArticles = buildLegacyGzhResults(legacyTask, seedArticles)
+                    RabbitMQClient.publishLegacyGzhResult(
+                        virtualHost = delivery.sourceVirtualHost,
+                        articles = legacyArticles,
+                    )
                 } else {
-                    AutoChatTask().dispatch()
+                    resultPublisher.publish(
+                        input = input,
+                        status = status,
+                        seedArticles = seedArticles,
+                        error = error,
+                        eventId = claim.resultEventId,
+                    )
                 }
+            }.also { context ->
+                activeRabbitTasks[message.idempotencyKey] = context
+                ownsTask = true
             }
         }
+        if (rabbitTaskContext == null) return
+        if (!ownsTask) {
+            rabbitTaskContext.completion.await()
+            return
+        }
+
+        try {
+            coroutineScope {
+                val heartbeat: Job = launch(Dispatchers.IO) {
+                    while (isActive) {
+                        delay(30_000L)
+                        runCatching { RabbitInboxStore.touch(message.idempotencyKey) }
+                            .onFailure { logRabbit("Inbox lease touch failed: ${it.message}") }
+                    }
+                }
+                try {
+                    val startDate = parseCaptureDate(input.payload.captureWindow.startsAt, endOfDay = false)
+                    val endDate = parseCaptureDate(input.payload.captureWindow.endsAt, endOfDay = true)
+                    if (startDate == null || endDate == null || startDate > endDate) {
+                        rabbitTaskContext.publishTerminal(
+                            status = "FAILED",
+                            error = AtdError(
+                                code = "INVALID_CAPTURE_WINDOW",
+                                message = "采集时间窗口格式非法或起止时间反向",
+                                retryable = false,
+                            ),
+                        )
+                    } else {
+                        val qrBody = try {
+                            when (message) {
+                                is RabbitTaskMessage.Legacy -> message.task.image
+                                is RabbitTaskMessage.V2 -> resolveRabbitQrImage(input.payload.account.qrImage)
+                            }
+                        } catch (e: RabbitQrResolutionException) {
+                            rabbitTaskContext.publishTerminal(
+                                status = "FAILED",
+                                error = AtdError(
+                                    code = e.code,
+                                    message = e.message ?: e.code,
+                                    retryable = e.retryable,
+                                ),
+                            )
+                            null
+                        }
+                        if (qrBody != null) {
+                            withContext(Dispatchers.Main) {
+                                generateAndEnqueueTask(
+                                    type = TYPE_OFFICIAL,
+                                    tag = input.business.jobId.toString(),
+                                    target = input.payload.account.name,
+                                    startDate = startDate,
+                                    endDate = endDate,
+                                    QRBody = qrBody,
+                                    rabbitTaskContext = rabbitTaskContext,
+                                )
+                            }
+                            rabbitTaskContext.completion.await()
+                        }
+                    }
+                } finally {
+                    heartbeat.cancelAndJoin()
+                }
+            }
+            RabbitInboxStore.markCompleted(message.idempotencyKey)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            RabbitInboxStore.markFailed(message.idempotencyKey, e)
+            throw e
+        } finally {
+            activeRabbitTasks.remove(message.idempotencyKey, rabbitTaskContext)
+        }
+    }
+
+    /** 手动任务最高；RabbitMQ 任务按 pro > xdag > thdag > test，同级保持 FIFO。 */
+    private fun nextTaskIndex(): Int = taskList.indices.maxByOrNull { index ->
+        taskList[index].rabbitTaskContext?.sourceVirtualHost
+            ?.let(::rabbitTaskPriorityFor)
+            ?: Int.MAX_VALUE
+    } ?: 0
+
+    private fun parseCaptureDate(value: String, endOfDay: Boolean): Long? {
+        val text = value.trim()
+        val isoFormats = listOf(
+            "yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
+            "yyyy-MM-dd'T'HH:mm:ssXXX",
+        )
+        isoFormats.forEach { pattern ->
+            val parsed = parseFully(
+                SimpleDateFormat(pattern, Locale.US).apply { isLenient = false },
+                text,
+            )
+            if (parsed != null) return parsed
+        }
+
+        val date = parseFully(
+            SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false },
+            text,
+        ) ?: return null
+        if (!endOfDay) return date
+
+        return Calendar.getInstance().apply {
+            timeInMillis = date
+            set(Calendar.HOUR_OF_DAY, 23)
+            set(Calendar.MINUTE, 59)
+            set(Calendar.SECOND, 59)
+            set(Calendar.MILLISECOND, 999)
+        }.timeInMillis
+    }
+
+    private fun parseFully(format: SimpleDateFormat, value: String): Long? {
+        val position = ParsePosition(0)
+        val parsed = format.parse(value, position)
+        return if (parsed != null && position.index == value.length) parsed.time else null
     }
 
     /**
@@ -189,13 +360,19 @@ object TaskDispatcher {
         target: String?,
         startDate: Long,
         endDate: Long,
-        QRBody: String?
+        QRBody: String?,
+        rabbitTaskContext: RabbitTaskContext? = null,
     ) {
 
 
         when(type){
-            TYPE_OFFICIAL->{
-                val result = isExceededTimes(RabbitMQClient.gzhCorrelationId!!, target!!)
+            TYPE_OFFICIAL -> if (rabbitTaskContext == null) {
+                val correlationId = RabbitMQClient.gzhCorrelationId
+                val result = if (correlationId != null && target != null) {
+                    isExceededTimes(correlationId, target)
+                } else {
+                    null
+                }
                 if (result != null && result) {
                     logRabbit("Task IS ExceededTimes,GzhTask[$target is Error ,correlationId: ${RabbitMQClient.gzhCorrelationId} ")
                     RabbitMQClient.consumerGzhFromBackend?.ask()
@@ -205,7 +382,15 @@ object TaskDispatcher {
             }
         }
 
-        AAOSTask(type, tag, target, startDate, endDate, QRBody).enqueue()
+        AAOSTask(
+            type = type,
+            tag = tag,
+            target = target,
+            startDate = startDate,
+            endDate = endDate,
+            QR = QRBody,
+            rabbitTaskContext = rabbitTaskContext,
+        ).enqueue()
 
 
 
@@ -259,9 +444,10 @@ object TaskDispatcher {
                 // 由于现在暂无公众号服务，所以这个清楚缓存的操作先删除
 //                wechatVideoCacheCaptor.removeAllVideosFromWechat()
 //                appContext.updateQRCode(tag)
+                // 任务进入队列前已完成二维码解析与校验，此处始终替换为本任务二维码。
                 appContext.deleteAllPhotos("aaos")
                 appContext.updateQR(tag, QR)
-                it.startCrawling(target, tag, startDate, endDate)
+                it.startCrawling(target, tag, startDate, endDate, rabbitTaskContext)
             }, 10000L)
         }
     }

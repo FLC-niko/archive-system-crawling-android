@@ -26,13 +26,21 @@ class WechatVideoCacheCaptor(private val context: Context) {
     }
 
     private fun findVideos(): List<DocumentFile> {
-        val docFile = DocumentFile.fromTreeUri(
-            context, Uri.parse(
-                DocumentFileUtils.changeToUri(
-                    WECHAT_CACHE_FOLDER
-                )
+        val cacheTreeUri = Uri.parse(DocumentFileUtils.changeToUri(WECHAT_CACHE_FOLDER))
+        val hasPersistedPermission = context.contentResolver.persistedUriPermissions.any { permission ->
+            permission.isReadPermission && cacheTreeUri.toString().startsWith(permission.uri.toString())
+        }
+        if (!hasPersistedPermission) {
+            logE(
+                context.className,
+                "Android 11+ 无法通过系统文件选择器授权微信 Android/data，跳过视频缓存清理",
             )
-        )!!
+            return emptyList()
+        }
+        val docFile = DocumentFile.fromTreeUri(
+            context,
+            cacheTreeUri,
+        ) ?: return emptyList()
         // 遍历微信 cache 文件夹下的所有文件
         val caches = docFile.listFiles()
         val cacheTargetFolders = mutableListOf<DocumentFile>()

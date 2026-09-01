@@ -2,6 +2,7 @@ package com.topviewclub.common.bean
 
 import android.os.Build
 import androidx.annotation.RequiresApi
+import com.topviewclub.common.mq.RabbitTaskContext
 import java.text.SimpleDateFormat
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -31,6 +32,6 @@ data class AAOSTask(
     val target: String? = null,
     val startDate: Long = Long.MIN_VALUE,
     val endDate: Long = Long.MIN_VALUE,
-    val QR: String? = null
+    val QR: String? = null,
+    val rabbitTaskContext: RabbitTaskContext? = null,
 )
-

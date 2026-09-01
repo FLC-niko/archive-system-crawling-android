@@ -22,10 +22,14 @@ class WriteOfficialArticle : Action {
 //                officialArticleSetInternal,
 //                service.serviceTag ?: ""
 //            )
-            OfficialArticleWriter.sendOfficialArticleSetToBigData(
-                officialArticleSetInternal,
-                service.aaosTask
-            )
+            // V2 结果由 OfficialOperationService 的 Completed 监听统一发布，
+            // 确保后续退出微信动作失败时不会提前报告成功。
+            if (service.aaosTask.rabbitTaskContext == null) {
+                OfficialArticleWriter.sendOfficialArticleSetToBigData(
+                    officialArticleSetInternal,
+                    service.aaosTask,
+                )
+            }
             return "ExitOfficialArticleList"
         } finally {
             service.resumeServiceDelay(event, 0L)

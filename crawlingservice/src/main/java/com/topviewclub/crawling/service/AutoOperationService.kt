@@ -114,6 +114,13 @@ abstract class AutoOperationService : AccessibilityService() {
     protected open val allowRecords: Boolean = true
 
     /**
+     * 服务未经过 [onServiceDestroy] 就被系统销毁时的兜底回调。
+     * 子类可用它完成外部任务的失败收口，例如通知 RabbitMQ 任务处理方。
+     */
+    protected open fun onUnexpectedServiceDestroy() {
+    }
+
+    /**
      * 通知通道 ID
      * */
     protected open val channelId = "Auto_Crawling"
@@ -309,23 +316,23 @@ abstract class AutoOperationService : AccessibilityService() {
     @CallSuper
     override fun onDestroy() {
         super.onDestroy()
+        val unexpectedlyDestroyed = !reportFlag
+        if (unexpectedlyDestroyed) {
+            reportFlag = true
+            runCatching {
+                if (allowRecords) {
+                    updateTaskStat(
+                        ServiceResult.Error(TaskResultType.SERVICE_DESTROY_UNEXPECTEDLY)
+                    )
+                }
+            }.onFailure { logE(this@AutoOperationService.className, "记录意外销毁失败: ${it.message}") }
+            runCatching { onUnexpectedServiceDestroy() }
+                .onFailure { logE(this@AutoOperationService.className, "意外销毁回调失败: ${it.message}") }
+        }
         runCatching {
             // 退出存活检测线程
             heartbeatHandler.quit()
             eventHandler.onServiceDestroy(this)
-
-            // 异常退出
-            if (!reportFlag && allowRecords) {
-                reportFlag = true
-                updateTaskStat(
-                    ServiceResult.Error(TaskResultType.SERVICE_DESTROY_UNEXPECTEDLY)
-                )
-//                sendMessageToHostError(
-//                    className,
-//                    TaskResultType.SERVICE_DESTROY_UNEXPECTEDLY,
-//                    serviceTag.toStringOrEmpty()
-//                )
-            }
             TaskStat.processingTask = NullTask()
         }
     }
