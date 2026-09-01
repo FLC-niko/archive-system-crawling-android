@@ -7,6 +7,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.topviewclub.crawling.service.*
 import com.topviewclub.crawling.service.action.Action
+import com.topviewclub.common.log.logI
 
 class HomingOfficialList : Action {
 
@@ -40,8 +41,34 @@ class HomingOfficialList : Action {
     ): String {
         // 还在滑动
         if (isScrolling) return actionName
-        if (isCompleted) return "CheckOfficialEndDate"
-        val root = service.rootInActiveWindow ?: return actionName
+        if (isCompleted) {
+            service.resumeCurrentAction()
+            return "CheckOfficialEndDate"
+        }
+        val root = service.rootInActiveWindow
+        val contactInfoVisible = event.className?.toString()
+            ?.contains("ContactInfoUI", ignoreCase = true) == true
+        if (root == null || root.childCount == 0) {
+            if (!contactInfoVisible) {
+                service.resumeServiceDelay(event, 300L)
+                return actionName
+            }
+            // Xiaomi/微信 8.0.76 的 ContactInfoUI 是空节点树。资料头部约占
+            // 屏幕上半部分，使用无障碍上滑将首批文章归位到可点击区域。
+            isScrolling = true
+            service.scroll(
+                540f,
+                1850f,
+                540f,
+                850f,
+                startTime = 0L,
+                duration = 900L,
+                callback = gestureResultCallback,
+            )
+            service.resumeServiceDelay(event, 1100L)
+            logI(actionName, "公众号列表节点不可见，提交无障碍归位手势")
+            return actionName
+        }
         // 开始匹配并滑动
         matchAndScroll(service, root)
         return actionName

@@ -11,42 +11,50 @@ import com.topviewclub.crawling.service.AutoOperationService
  * */
 class ImmediatelyProcessHandler : AccessibilityEventHandler() {
 
-    private lateinit var handleThread: HandlerThread
+    private var handleThread: HandlerThread? = null
 
-    private lateinit var handler: Handler
+    private var handler: Handler? = null
 
     private var isActive = false
 
     override fun onServiceCreate(service: AutoOperationService) {
         isActive = true
-        handleThread = HandlerThread(
+        val thread = HandlerThread(
             "ImmediatelyProcessHandler",
             Process.THREAD_PRIORITY_FOREGROUND
         )
-        handleThread.start()
-        handler = Handler(handleThread.looper)
+        thread.start()
+        handleThread = thread
+        handler = Handler(thread.looper)
     }
 
-    @Suppress("DiscouragedPrivateApi")
     override fun onAccessibilityEvent(service: AutoOperationService, event: AccessibilityEvent) {
         if (!isActive) return
-        val type = event.eventType
-        handler.post{
-            AccessibilityEvent::class.java.getDeclaredField("mEventType").apply {
-                isAccessible = true
-                set(event, type)
+        val currentHandler = handler ?: return
+        // AccessibilityEvent 来自系统对象池，回调返回后不能把原对象交给后台线程。
+        val eventCopy = AccessibilityEvent.obtain(event)
+        val posted = currentHandler.post {
+            try {
+                if (isActive) {
+                    handleAccessibilityEvent(service, eventCopy)
+                }
+            } finally {
+                eventCopy.recycle()
             }
-            handleAccessibilityEvent(service, event)
         }
+        if (!posted) eventCopy.recycle()
     }
 
     override fun post(r: Runnable) {
-        handler.post(r)
+        if (isActive) handler?.post(r)
     }
 
     override fun onServiceDestroy(service: AutoOperationService) {
         isActive = false
-        handleThread.quit()
+        handler?.removeCallbacksAndMessages(null)
+        handleThread?.quitSafely()
+        handler = null
+        handleThread = null
     }
 
 }

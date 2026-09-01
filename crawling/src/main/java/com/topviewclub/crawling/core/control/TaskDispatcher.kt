@@ -30,6 +30,7 @@ import com.topviewclub.common.util.AnalysisJson
 import com.topviewclub.common.util.className
 import com.topviewclub.common.util.getCurrentTime
 import com.topviewclub.crawling.wechat.auto.AutoChatOperationService
+import com.topviewclub.crawling.service.AutoOperationService
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -54,13 +55,18 @@ object TaskDispatcher {
     private val rabbitClaimMutex = Mutex()
     private val activeRabbitTasks = ConcurrentHashMap<String, RabbitTaskContext>()
 
+    @Volatile
+    private var initialized = false
+
     private val processingTaskListener: (AAOSTask) -> Unit = {
         TaskStat.enqueuingTaskList.postValue(taskList.toMutableList())
         if (it.type == TaskCrawlingType.TYPE_NOTHING) {
             if (taskList.isNotEmpty()) {
                 taskList.removeAt(nextTaskIndex()).dispatch()
             } else {
-                AutoChatTask().dispatch()
+                // MQ Worker 空闲时保持等待，不自动启动一个可能未授权的自动聊天任务。
+                // 否则公众号任务到达后会被 AutoChat 占住，无法进入公众号无障碍链路。
+                logI("AAOS Initializer", "AAOS idle; waiting for RabbitMQ task")
             }
         }
     }
@@ -68,7 +74,12 @@ object TaskDispatcher {
 
     @RequiresApi(Build.VERSION_CODES.O)
     @MainThread
+    @Synchronized
     fun init() {
+        if (initialized) {
+            logI("AAOS Initializer", "AAOS already initialized")
+            return
+        }
 
         // 注册公众号，视频号，单个视频的生产者
         RabbitMQClient.prepareRabbitProducer()
@@ -164,6 +175,8 @@ object TaskDispatcher {
 
         TaskStat.startDate = Date()
         TaskStat.addProcessingTaskListener(processingTaskListener)
+        initialized = true
+        logI("AAOS Initializer", "AAOS auto start success")
     }
 
     /**
@@ -176,6 +189,10 @@ object TaskDispatcher {
     ) {
         val message = RabbitTaskDecoder.decode(body.toByteArray(Charsets.UTF_8))
         val input = message.asV2()
+        logRabbit(
+            "收到公众号任务: vhost=${delivery.sourceVirtualHost}, " +
+                    "jobId=${input.business.jobId}, account=${input.payload.account.name}",
+        )
         var ownsTask = false
         val rabbitTaskContext = rabbitClaimMutex.withLock {
             activeRabbitTasks[message.idempotencyKey]?.let { active ->
@@ -424,6 +441,9 @@ object TaskDispatcher {
         if (TaskStat.processingTask == AutoChatTask()) {
             // 正在执行 AC 服务，告知准备停止
             AutoChatOperationService.shutdownACService()
+        } else if (TaskStat.processingTask.type == TaskCrawlingType.TYPE_NOTHING) {
+            // MQ Worker 空闲时没有后台 AutoChat 任务负责触发状态切换，入队后要立即派发。
+            taskList.removeAt(nextTaskIndex()).dispatch()
         }
     }
 
@@ -431,7 +451,14 @@ object TaskDispatcher {
     private fun AAOSTask.dispatch() {
         TaskStat.processingTask = this
         if (type != TaskCrawlingType.TYPE_AUTO_CHAT) {
-            logI(this@TaskDispatcher.className, this@dispatch.toString())
+            // AAOSTask 是 data class，直接 toString 会把二维码 Base64 写入 logcat。
+            // 日志只保留可排查任务所需的元数据，避免泄露二维码内容。
+            logI(
+                this@TaskDispatcher.className,
+                "dispatch type=$type tag=$tag target=$target " +
+                        "startDate=$startDate endDate=$endDate " +
+                        "rabbitVhost=${rabbitTaskContext?.sourceVirtualHost ?: "none"}",
+            )
 //            sendMessageToHostErrorOnce(
 //                this@TaskDispatcher.className,
 //                TaskResultType.PLEASE_PUSH_PICTURE,
@@ -448,6 +475,11 @@ object TaskDispatcher {
                 appContext.deleteAllPhotos("aaos")
                 appContext.updateQR(tag, QR)
                 it.startCrawling(target, tag, startDate, endDate, rabbitTaskContext)
+                val woke = AutoOperationService.wakeServiceForTask(type)
+                logI(
+                    this@TaskDispatcher.className,
+                    "accessibility wake type=$type connected=$woke",
+                )
             }, 10000L)
         }
     }

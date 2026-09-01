@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -24,7 +25,9 @@ import com.topviewclub.crawling.service.handler.AccessibilityEventHandler
 import com.topviewclub.crawling.service.handler.ImmediatelyProcessHandler
 import com.topviewclub.crawling.service.action.Action
 import com.topviewclub.crawling.service.action.ActionException
+import java.lang.ref.WeakReference
 import java.util.*
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * 封装好的专用于模拟点击的无障碍服务
@@ -36,6 +39,21 @@ import java.util.*
  * 最后，记得在清单文件中注册，否则服务无法启动，而且也不会有任何报错
  * */
 abstract class AutoOperationService : AccessibilityService() {
+
+    companion object {
+        private val connectedServices =
+            ConcurrentHashMap<String, WeakReference<AutoOperationService>>()
+
+        /**
+         * RabbitMQ 任务可能在微信静止且没有新无障碍事件时到达。主动唤醒已连接
+         * 的对应服务，让它读取 TaskStat 并开始责任链。
+         */
+        fun wakeServiceForTask(taskType: String): Boolean {
+            val service = connectedServices[taskType]?.get() ?: return false
+            service.wakeForCurrentTask()
+            return true
+        }
+    }
 
     object ActionType {
         const val ActionSuccess = "_%aaos_action_success%_"
@@ -136,15 +154,24 @@ abstract class AutoOperationService : AccessibilityService() {
     private var alive: Boolean = true @Synchronized set
 
     /**
+     * 无障碍服务可能会在应用没有任务时先被系统绑定。此时不能启动任务线程，
+     * 也不能把服务主动禁用，否则下一条任务到来时无法继续复用这次授权。
+     */
+    @Volatile
+    private var taskInitialized = false
+    private var activeTask: AAOSTask? = null
+
+    /**
      * 标志服务是否正常退出，若没有正常退出，则该值为 false
      * */
+    @Volatile
     private var reportFlag = false
 
     /**
-     * 添加服务结束的回调，默认最后会向主机发送执行报告并结束服务
+     * 添加服务结束的回调，默认向主机发送执行报告，然后保留无障碍授权等待下一条任务。
      * */
     private val serviceDestroyList = LinkedList<(ServiceResult) -> Unit>().apply {
-        addFirst { result ->
+        add(0, { result: ServiceResult ->
             if (allowRecords) {
                 updateTaskStat(result)
                 logI(
@@ -179,8 +206,9 @@ abstract class AutoOperationService : AccessibilityService() {
                     serviceTag.toStringOrEmpty()
                 )
             }
-            disableSelf()
-        }
+            // 不调用 disableSelf()：该服务由 RabbitMQ 长期复用，主动禁用会清掉用户授权，
+            // 下一条任务无法再自动进入无障碍动作链。
+        })
 
     }
 
@@ -190,7 +218,7 @@ abstract class AutoOperationService : AccessibilityService() {
      * @see [TaskResultType]
      * */
     fun addOnServiceDestroyListener(listener: (ServiceResult) -> Unit) {
-        serviceDestroyList.addFirst(listener)
+        serviceDestroyList.add(0, listener)
     }
 
     /**
@@ -205,10 +233,20 @@ abstract class AutoOperationService : AccessibilityService() {
     fun resumeServiceDelay(
         event: AccessibilityEvent, delay: Long, before: () -> Unit = {}
     ) {
-        Handler(mainLooper).postDelayed({
-            before()
-            onAccessibilityEvent(event)
+        // AccessibilityEvent 是系统对象池中的对象，回调返回后可能立即被回收；不能把
+        // 收到的实例直接跨线程或延迟使用。
+        val eventCopy = AccessibilityEvent.obtain(event)
+        val posted = Handler(mainLooper).postDelayed({
+            try {
+                if (taskInitialized) {
+                    before()
+                    onAccessibilityEvent(eventCopy)
+                }
+            } finally {
+                eventCopy.recycle()
+            }
         }, delay)
+        if (!posted) eventCopy.recycle()
     }
 
     private fun updateTaskStat(result: ServiceResult) {
@@ -230,43 +268,104 @@ abstract class AutoOperationService : AccessibilityService() {
     /**
      * 用于检测服务是否卡死在某一步骤的线程
      * */
-    private val heartbeatHandler = TimerThread("SNR Checker", 15000L) {
-        // 如果 15 秒后仍然收不到存活信号，则认为服务已经卡住
-        val live = alive
-        if (!live) {
-            // post 到操作执行线程内执行，保证线程安全
-            eventHandler.post {
-                val actionName = actionMap[targetActionName]?.actionName ?: "None"
-                logE("SNR Check", actionName)
-                // 立即进入终止状态
-                targetActionName = ActionType.ActionDead
-                // 回报无响应错误
-                onServiceDestroy(
-                    ServiceResult.Error(TaskResultType.SERVICE_NO_RESPONSE)
-                )
-            }
-        } else {
-            alive = false
-            // 向注册中心发送心跳
-            sendToNacosRegisterBeat()
-            //向主机发送心跳
-            sendHeartBeatToHostHeartbeatOnce()
+    private var heartbeatHandler: TimerThread? = null
 
+    private fun startHeartbeat() {
+        heartbeatHandler = TimerThread("SNR Checker", 15000L) {
+            if (!taskInitialized) return@TimerThread false
+
+            // 如果 15 秒后仍然收不到存活信号，则认为服务已经卡住
+            val live = alive
+            if (!live) {
+                // post 到操作执行线程内执行，保证线程安全
+                eventHandler.post {
+                    val actionName = actionMap[targetActionName]?.actionName ?: "None"
+                    logE("SNR Check", actionName)
+                    // 立即进入终止状态
+                    targetActionName = ActionType.ActionDead
+                    // 回报无响应错误
+                    onServiceDestroy(
+                        ServiceResult.Error(TaskResultType.SERVICE_NO_RESPONSE)
+                    )
+                }
+            } else {
+                alive = false
+                // 向注册中心发送心跳
+                sendToNacosRegisterBeat()
+                //向主机发送心跳
+                sendHeartBeatToHostHeartbeatOnce()
+
+            }
+            return@TimerThread live
         }
-        return@TimerThread live
     }
 
     @CallSuper
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
+        if (!initializeForCurrentTask()) return
         eventHandler.onAccessibilityEvent(this, event)
     }
 
+    /**
+     * 在收到事件时再初始化任务，兼容无障碍服务早于任务启动而被系统绑定的情况。
+     */
+    private fun initializeForCurrentTask(): Boolean {
+        if (taskInitialized) return true
+        val task = TaskStat.processingTask
+        if (task.type != crawlServiceType) return false
+
+        activeTask = task
+        addActions()
+        eventHandler.onServiceCreate(this)
+        taskInitialized = true
+        startForegroundNotification()
+        startHeartbeat()
+        logI(
+            this@AutoOperationService.className,
+            "Accessibility service ready for task: ${task.type}, tag=${task.tag}",
+        )
+        return true
+    }
+
+    private fun wakeForCurrentTask() {
+        Handler(mainLooper).post {
+            if (!initializeForCurrentTask()) return@post
+            dispatchSyntheticEvent()
+            logI(
+                this@AutoOperationService.className,
+                "Task wake event dispatched for ${activeTask?.type}",
+            )
+        }
+    }
+
+    /** 供异步截图/OCR 回调继续当前责任链，不依赖页面额外产生事件。 */
+    fun resumeCurrentAction() {
+        Handler(mainLooper).post {
+            if (taskInitialized) dispatchSyntheticEvent()
+        }
+    }
+
+    private fun dispatchSyntheticEvent() {
+        val currentRoot = rootInActiveWindow
+        val wakeEvent = AccessibilityEvent.obtain(
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
+        ).apply {
+            packageName = currentRoot?.packageName ?: applicationInfo.packageName
+            className = currentRoot?.className ?: this@AutoOperationService.javaClass.name
+        }
+        try {
+            onAccessibilityEvent(wakeEvent)
+        } finally {
+            wakeEvent.recycle()
+        }
+    }
+
     internal fun handleEvent(event: AccessibilityEvent): Boolean {
+        if (!taskInitialized) return false
         runCatching {
-            // 提示检测线程，当前服务仍存活
-            if (lastTargetActionName != targetActionName) {
-                alive = true
-            }
+            // 每次收到真实或延迟探针事件都证明动作线程仍在运行。一个动作在
+            // 等待页面切换时可能连续返回自身，不能只靠动作名变化刷新心跳。
+            alive = true
             // 说明服务已经停止
             if (targetActionName == ActionType.ActionDead) return false
             val nextActionName = actionMap[targetActionName]?.execute(
@@ -302,21 +401,59 @@ abstract class AutoOperationService : AccessibilityService() {
     }
 
     private fun onServiceDestroy(result: ServiceResult) {
+        if (reportFlag) return
         reportFlag = true
         // 切换主线程
         if (Looper.myLooper() == Looper.getMainLooper()) {
-            serviceDestroyList.forEach { it(result) }
+            notifyServiceDestroyListeners(result)
         } else {
             Handler(Looper.getMainLooper()).post {
-                serviceDestroyList.forEach { it(result) }
+                notifyServiceDestroyListeners(result)
             }
+        }
+    }
+
+    private fun notifyServiceDestroyListeners(result: ServiceResult) {
+        serviceDestroyList.toList().forEach { listener ->
+            runCatching { listener(result) }
+                .onFailure {
+                    logE(
+                        this@AutoOperationService.className,
+                        "服务结束回调失败: ${it.message}",
+                    )
+                }
+        }
+        resetAfterTask()
+    }
+
+    /**
+     * 一条任务结束后释放动作线程，但不撤销系统中的无障碍授权。
+     */
+    private fun resetAfterTask() {
+        if (!taskInitialized) return
+        heartbeatHandler?.quit()
+        heartbeatHandler = null
+        eventHandler.onServiceDestroy(this)
+
+        val finishedTask = activeTask
+        targetActionName = actionList.firstOrNull()?.actionName ?: targetActionName
+        lastTargetActionName = ActionType.ActionNull
+        alive = true
+        taskInitialized = false
+        activeTask = null
+        reportFlag = false
+        if (TaskStat.processingTask == finishedTask) {
+            TaskStat.processingTask = NullTask()
         }
     }
 
     @CallSuper
     override fun onDestroy() {
+        connectedServices[crawlServiceType]?.get()?.let { connected ->
+            if (connected === this) connectedServices.remove(crawlServiceType)
+        }
         super.onDestroy()
-        val unexpectedlyDestroyed = !reportFlag
+        val unexpectedlyDestroyed = taskInitialized && !reportFlag
         if (unexpectedlyDestroyed) {
             reportFlag = true
             runCatching {
@@ -331,9 +468,16 @@ abstract class AutoOperationService : AccessibilityService() {
         }
         runCatching {
             // 退出存活检测线程
-            heartbeatHandler.quit()
-            eventHandler.onServiceDestroy(this)
-            TaskStat.processingTask = NullTask()
+            heartbeatHandler?.quit()
+            heartbeatHandler = null
+            if (taskInitialized) {
+                eventHandler.onServiceDestroy(this)
+                if (TaskStat.processingTask == activeTask) {
+                    TaskStat.processingTask = NullTask()
+                }
+            }
+            taskInitialized = false
+            activeTask = null
         }
     }
 
@@ -349,14 +493,12 @@ abstract class AutoOperationService : AccessibilityService() {
     @CallSuper
     override fun onCreate() {
         super.onCreate()
-        if (crawlServiceType != TaskStat.processingTask.type) {
-            onServiceDestroy(
-                ServiceResult.Error(TaskResultType.UNEXPECTED_CRAWLING_TYPE)
+        connectedServices[crawlServiceType] = WeakReference(this)
+        if (!initializeForCurrentTask()) {
+            logI(
+                this@AutoOperationService.className,
+                "No matching task yet; accessibility service is waiting",
             )
-        } else {
-            addActions()
-            eventHandler.onServiceCreate(this)
-            startForegroundNotification()
         }
     }
 
@@ -377,7 +519,15 @@ abstract class AutoOperationService : AccessibilityService() {
             val builder = Notification.Builder(this, channelId).setContentTitle(channelId)
                 .setContentText(channelId)
             val notification = builder.build()
-            startForeground(notificationId, notification)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startForeground(
+                    notificationId,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
+                )
+            } else {
+                startForeground(notificationId, notification)
+            }
         }
     }
 

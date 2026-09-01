@@ -5,7 +5,9 @@ plugins {
 }
 
 android {
+    namespace = "com.topviewclub.crawling.wechat.auto"
     compileSdk = Build.compileSdk
+    buildToolsVersion = "35.0.0"
 
     defaultConfig {
         minSdk = Build.minSdk

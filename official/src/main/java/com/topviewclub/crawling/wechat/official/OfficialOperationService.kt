@@ -41,14 +41,15 @@ class OfficialOperationService : WechatOperationService() {
 
     override val crawlServiceType: String = TaskCrawlingType.TYPE_OFFICIAL
 
-    override val aaosTask: AAOSTask = AAOSTask(
-        TaskCrawlingType.TYPE_OFFICIAL,
-        tag,
-        targetAccount,
-        startDate,
-        endDate,
-        rabbitTaskContext = preparedRabbitTaskContext,
-    )
+    override val aaosTask: AAOSTask
+        get() = AAOSTask(
+            TaskCrawlingType.TYPE_OFFICIAL,
+            tag,
+            targetAccount,
+            startDate,
+            endDate,
+            rabbitTaskContext = preparedRabbitTaskContext,
+        )
 
     override val target: String
         get() {

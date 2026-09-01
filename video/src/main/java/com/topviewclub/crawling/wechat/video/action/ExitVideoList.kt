@@ -1,7 +1,6 @@
 package com.topviewclub.crawling.wechat.video.action
 
 import android.view.accessibility.AccessibilityEvent
-import com.topviewclub.common.util.startWechatScanActivityOnly
 import com.topviewclub.crawling.service.AutoOperationService
 import com.topviewclub.crawling.service.action.Action
 import com.topviewclub.crawling.service.back
@@ -16,8 +15,8 @@ class ExitVideoList : Action {
     ): String {
         // 返回上一级界面
         service.back()
-        service.startWechatScanActivityOnly()
-        return "EnterWechatLauncher"
+        service.resumeServiceDelay(event, 250L)
+        return "ReturnToWechatLauncher"
     }
 
 }

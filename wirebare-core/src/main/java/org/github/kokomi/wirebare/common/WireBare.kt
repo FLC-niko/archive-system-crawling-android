@@ -39,7 +39,7 @@ object WireBare {
 
     private var status: Int = WIREBARE_STATUS_SERVICE_DESTROY
 
-    private lateinit var _configturation: WireBareConfiguration
+    private var _configturation: WireBareConfiguration? = null
 
     private val listeners: MutableSet<IProxyStatusListener> by lazy { hashSetOf() }
 
@@ -167,6 +167,11 @@ object WireBare {
     }
 
     internal val configuration: WireBareConfiguration
+        get() = checkNotNull(_configturation) {
+            "WireBare 尚未准备配置"
+        }
+
+    internal val configurationOrNull: WireBareConfiguration?
         get() = _configturation
 
 }

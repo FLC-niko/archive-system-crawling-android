@@ -4,7 +4,9 @@ plugins {
 }
 
 android {
+    namespace = "com.topviewclub.crawling.core"
     compileSdk = Build.compileSdk
+    buildToolsVersion = "35.0.0"
 
     defaultConfig {
         minSdk = Build.minSdk
@@ -30,8 +32,8 @@ android {
     kotlinOptions {
         jvmTarget = "1.8"
     }
-    viewBinding {
-        isEnabled = true
+    buildFeatures {
+        viewBinding = true
     }
 }
 

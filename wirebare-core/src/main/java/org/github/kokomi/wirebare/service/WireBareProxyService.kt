@@ -2,6 +2,7 @@ package org.github.kokomi.wirebare.service
 
 import android.app.Notification
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.net.VpnService
 import android.os.Build
 import org.github.kokomi.wirebare.common.WireBare
@@ -57,8 +58,23 @@ abstract class WireBareProxyService : VpnService(),
     }
 
     private fun startWireBare() {
-        startForeground(notificationId, notification())
-        this launchWith WireBare.configuration
+        val configuration = WireBare.configurationOrNull ?: run {
+            // 进程被系统重启后，旧的 start intent 可能仍会重放，但配置只存在于
+            // 原进程内存中。安全停止该请求，避免再次因 lateinit 配置导致进程崩溃。
+            stopSelf()
+            return
+        }
+        val foregroundNotification = notification()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(
+                notificationId,
+                foregroundNotification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
+            )
+        } else {
+            startForeground(notificationId, foregroundNotification)
+        }
+        this launchWith configuration
     }
 
     private fun stopWireBare() {

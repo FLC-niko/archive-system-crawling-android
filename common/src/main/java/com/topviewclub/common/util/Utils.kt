@@ -66,48 +66,6 @@ val Any.className: String
 fun Any?.toStringOrEmpty(): String = this?.toString() ?: ""
 
 /**
- * 打开微信扫描二维码界面
- * */
-fun Context.startWechatScanActivity() {
-    // 回桌面一次，保证有打开微信的时间去触发无障碍服务
-    startActivity(
-        Intent(Intent.ACTION_MAIN).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            addCategory(Intent.CATEGORY_HOME)
-        }
-    )
-    // 延迟是给时间给手机缓一下
-    Handler(Looper.getMainLooper()).postDelayed({
-        startActivity(Intent().apply {
-            component = ComponentName(
-                "com.tencent.mm",
-                "com.tencent.mm.ui.LauncherUI"
-            )
-            putExtra("LauncherUI.From.Scaner.Shortcut", true)
-            @Suppress("WrongConstant")
-            flags = 0x14000000
-            action = Intent.ACTION_VIEW
-        })
-    }, 3000L)
-}
-
-/**
- * 打开微信扫描二维码界面
- * */
-fun Context.startWechatScanActivityOnly() {
-    startActivity(Intent().apply {
-        component = ComponentName(
-            "com.tencent.mm",
-            "com.tencent.mm.ui.LauncherUI"
-        )
-        putExtra("LauncherUI.From.Scaner.Shortcut", true)
-        @Suppress("WrongConstant")
-        flags = 0x14000000
-        action = Intent.ACTION_VIEW
-    })
-}
-
-/**
  * 打开学习强国 APP
  * */
 fun Context.startXueXiActivity() {
@@ -191,4 +149,3 @@ fun getCurrentTime():String{
 //    startActivity(intent)
 //    Process.killProcess(Process.myPid())
 //}
-

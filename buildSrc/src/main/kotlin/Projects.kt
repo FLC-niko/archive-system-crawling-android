@@ -1,9 +1,11 @@
 object Build {
     const val applicationId = "com.topviewclub.crawling"
-    const val compileSdk = 32
+    const val compileSdk = 35
     const val minSdk = 24
-    const val targetSdk = 32
-    const val versionCode = 1
+    const val targetSdk = 35
+    // 每次旁装真机验证递增，避免部分 MIUI 包管理器对同 versionCode 的
+    // streamed install 返回 Success 但仍保留旧 base.apk。
+    const val versionCode = 2
     const val versionName = "你猜"
 }
 
@@ -44,7 +46,7 @@ object Dependencies {
     }
 
     object Room {
-        private const val room_version = "2.4.3"
+        private const val room_version = "2.6.1"
         const val runtime = "androidx.room:room-runtime:$room_version"
         const val compiler = "androidx.room:room-compiler:$room_version"
     }

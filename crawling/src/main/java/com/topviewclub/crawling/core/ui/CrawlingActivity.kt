@@ -10,7 +10,6 @@ import android.provider.Settings
 import androidx.activity.result.contract.ActivityResultContracts
 import com.topviewclub.common.bean.TaskStat
 import com.topviewclub.common.log.logI
-import com.topviewclub.common.mq.RabbitMQClient
 import com.topviewclub.common.shizuku.*
 import com.topviewclub.common.storage.DocumentFileUtils
 import com.topviewclub.common.storage.video.WECHAT_CACHE_FOLDER
@@ -130,14 +129,8 @@ class CrawlingActivity : AppCompatActivity() {
 
             btnStartAaos.setOnClickListener {
                 btnStartAaos.isEnabled = false
-                TaskStat.clearProcessingTaskListener()
-
-                prepareProxy()
-
                 TaskDispatcher.init()
-                RabbitMQClient
-                toast("已响应，缓冲 10 秒后启动服务")
-                logI("AAOS Initializer", "AAOS Start Success.")
+                toast("AAOS 已自动启动，正在等待公众号任务")
             }
         }
 

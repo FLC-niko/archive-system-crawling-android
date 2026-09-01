@@ -1,6 +1,7 @@
 package com.topviewclub.common.mq
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -22,7 +23,16 @@ class RabbitTaskDecoderTest {
               "producer":{"service":"backend"},
               "business":{"jobId":123,"jobRunId":"run-1"},
               "payload":{
-                "account":{"name":"测试公众号"},
+                "account":{
+                  "name":"测试公众号",
+                  "qrImage":{
+                    "transport":"INLINE_BASE64",
+                    "dataBase64":"cXItYnl0ZXM=",
+                    "sha256":"256c71a1a5c9904f339078276acc7b056c2e307b81c70f4c5d44a910f8bfb639",
+                    "contentType":"image/png",
+                    "sizeBytes":8
+                  }
+                },
                 "captureWindow":{"startsAt":"2026-08-10","endsAt":"2026-08-13"}
               }
             }
@@ -35,6 +45,10 @@ class RabbitTaskDecoderTest {
         assertEquals("wf-1", task.workflowId)
         assertEquals("测试公众号", task.payload.account.name)
         assertEquals(123L, task.business.jobId)
+        assertNotNull(task.payload.account.qrImage)
+        assertEquals("INLINE_BASE64", task.payload.account.qrImage?.transport)
+        assertEquals("cXItYnl0ZXM=", task.payload.account.qrImage?.dataBase64)
+        assertEquals(8L, task.payload.account.qrImage?.sizeBytes)
     }
 
     @Test

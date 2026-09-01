@@ -11,38 +11,48 @@ class TimerTriggerHandler(
     private val interval: Long
 ) : AccessibilityEventHandler() {
 
-    private lateinit var autoOperationService: AutoOperationService
+    private var autoOperationService: AutoOperationService? = null
 
     private var accessibilityEvent: AccessibilityEvent? = null
 
-    private var eventType: Int = 0
+    private val eventLock = Any()
 
-    private lateinit var handleThread: TimerThread
+    private var handleThread: TimerThread? = null
 
-    @Suppress("DiscouragedPrivateApi")
     override fun onServiceCreate(service: AutoOperationService) {
         autoOperationService = service
         handleThread = TimerThread("TimerTriggerHandler", interval) {
-            val event = accessibilityEvent ?: return@TimerThread true
-            AccessibilityEvent::class.java.getDeclaredField("mEventType").apply {
-                isAccessible = true
-                set(event, eventType)
+            val event = synchronized(eventLock) {
+                accessibilityEvent?.let(AccessibilityEvent::obtain)
+            } ?: return@TimerThread true
+            try {
+                autoOperationService?.let { handleAccessibilityEvent(it, event) } ?: false
+            } finally {
+                event.recycle()
             }
-            handleAccessibilityEvent(autoOperationService, event)
         }
     }
 
     override fun onAccessibilityEvent(service: AutoOperationService, event: AccessibilityEvent) {
-        accessibilityEvent = event
-        eventType = event.eventType
+        val eventCopy = AccessibilityEvent.obtain(event)
+        synchronized(eventLock) {
+            accessibilityEvent?.recycle()
+            accessibilityEvent = eventCopy
+        }
     }
 
     override fun post(r: Runnable) {
-        handleThread.post(r)
+        handleThread?.post(r)
     }
 
     override fun onServiceDestroy(service: AutoOperationService) {
-        handleThread.quit()
+        handleThread?.quit()
+        handleThread = null
+        autoOperationService = null
+        synchronized(eventLock) {
+            accessibilityEvent?.recycle()
+            accessibilityEvent = null
+        }
     }
 
 }

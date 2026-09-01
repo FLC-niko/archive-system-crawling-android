@@ -3,7 +3,6 @@ package com.topviewclub.crawling.core.broadcast
 import android.content.Intent
 import com.topviewclub.common.base.appContext
 import com.topviewclub.common.base.wechatVideoCacheCaptor
-import com.topviewclub.common.bean.TaskStat
 import com.topviewclub.common.bean.TaskResultType
 import com.topviewclub.common.log.logE
 import com.topviewclub.common.log.logI
@@ -72,7 +71,6 @@ sealed class Option(
 
     private object StartAAOS : Option(
         BROADCAST_START_AAOS, {
-            TaskStat.clearProcessingTaskListener()
             prepareProxy(CrawlingActivity.activity!!,2222)
             TaskDispatcher.init()
             logI("AAOS Initializer", "AAOS Start Success.")

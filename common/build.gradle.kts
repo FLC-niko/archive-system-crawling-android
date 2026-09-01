@@ -1,16 +1,27 @@
+import java.io.File
+import java.util.Properties
+
 plugins {
     id("com.android.library")
     id("org.jetbrains.kotlin.android")
-    kotlin("plugin.serialization") version "1.5.31"
+    kotlin("plugin.serialization") version "1.9.0"
     id("org.jetbrains.kotlin.kapt")
 
 }
 
-// RabbitMQ 密码只从构建参数或环境变量注入，不能落到源码或 gradle.properties。
+// RabbitMQ 密码从构建参数、环境变量或 local.properties 注入。
+val localPropertiesFile: File = rootProject.file("local.properties")
+val passwordFromLocal: String = if (localPropertiesFile.exists()) {
+    val props = Properties()
+    localPropertiesFile.inputStream().use { stream -> props.load(stream) }
+    props.getProperty("RABBITMQ_PASSWORD", "")
+} else {
+    ""
+}
+
 val rabbitMqPassword = providers.gradleProperty("RABBITMQ_PASSWORD")
     .orElse(providers.environmentVariable("RABBITMQ_PASSWORD"))
-    .orElse("")
-    .get()
+    .getOrElse(passwordFromLocal)
 
 fun quoteBuildConfigString(value: String): String =
     "\"" + value
@@ -19,7 +30,13 @@ fun quoteBuildConfigString(value: String): String =
         .replace("\n", "\\n") + "\""
 
 android {
+    namespace = "com.topviewclub.common"
     compileSdk = Build.compileSdk
+    buildToolsVersion = "35.0.0"
+
+    buildFeatures {
+        buildConfig = true
+    }
 
     defaultConfig {
         minSdk = Build.minSdk
@@ -73,7 +90,7 @@ dependencies {
     implementation(Dependencies.Json.gson)
 
     implementation(Dependencies.Glide.glide)
-    annotationProcessor(Dependencies.Glide.process)
+    kapt(Dependencies.Glide.process)
 
 
     implementation(Dependencies.Room.runtime)

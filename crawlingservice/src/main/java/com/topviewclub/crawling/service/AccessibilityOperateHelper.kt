@@ -75,6 +75,56 @@ fun AccessibilityService.back() =
     performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
 
 /**
+ * 利用无障碍服务派发一次点击手势。
+ *
+ * 微信扫一扫/相册在部分版本使用自绘 View，节点树中没有可执行的点击节点；
+ * 这类页面仍然可以由无障碍服务在屏幕坐标上派发手势完成操作。
+ */
+fun AccessibilityService.tap(
+    x: Float,
+    y: Float,
+    startTime: Long = 0L,
+    duration: Long = 50L,
+    callback: AccessibilityService.GestureResultCallback? = null,
+    handler: Handler? = null,
+): Boolean {
+    val path = Path().apply {
+        moveTo(x, y)
+        // StrokeDescription 需要一条非空路径，1px 的移动对点击结果没有影响。
+        lineTo(x + 1f, y + 1f)
+    }
+    val gesture = GestureDescription.Builder()
+        .addStroke(GestureDescription.StrokeDescription(path, startTime, duration))
+        .build()
+    return dispatchGesture(gesture, callback, handler)
+}
+
+/**
+ * 利用无障碍服务派发一次长按手势。
+ *
+ * MIUI Launcher 的应用图标并不总是暴露 ACTION_LONG_CLICK；调用方可以在
+ * 节点动作失败时用这个手势打开应用快捷方式菜单。
+ */
+fun AccessibilityService.longPress(
+    x: Float,
+    y: Float,
+    startTime: Long = 0L,
+    duration: Long = 650L,
+    callback: AccessibilityService.GestureResultCallback? = null,
+    handler: Handler? = null,
+): Boolean {
+    val path = Path().apply {
+        moveTo(x, y)
+        // 保持极小位移，避免某些设备把零长度 Stroke 当成非法手势。
+        lineTo(x + 1f, y + 1f)
+    }
+    val gesture = GestureDescription.Builder()
+        .addStroke(GestureDescription.StrokeDescription(path, startTime, duration))
+        .build()
+    return dispatchGesture(gesture, callback, handler)
+}
+
+/**
  * 利用无障碍服务模拟手势滑动
  *
  * @param startX 手势开始位置的 X 坐标

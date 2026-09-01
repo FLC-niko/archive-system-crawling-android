@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
-    package="com.topviewclub.crawling">
+    xmlns:tools="http://schemas.android.com/tools">
 
     <queries>
         <package android:name="com.tencent.mm" />
@@ -44,6 +43,28 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+            This device build is used for the official-account collector. The
+            other feature modules remain available to the project, but their
+            accessibility services must not be published into this APK: every
+            service is shown as a separate "AAOS" entry by MIUI.
+        -->
+        <service
+            android:name="com.topviewclub.crawling.wechat.video.VideoOperationService"
+            tools:node="remove" />
+        <service
+            android:name="com.topviewclub.crawling.xuexi.XueXiOperationService"
+            tools:node="remove" />
+        <service
+            android:name="com.topviewclub.crawling.wechat.auto.AutoChatOperationService"
+            tools:node="remove" />
+        <service
+            android:name="com.topviewclub.crawling.service.wechat.check.CheckQRCodeOperationService"
+            tools:node="remove" />
+        <service
+            android:name="com.topviewclub.crawling.service.wechat.weread.WeReadLoginOperationService"
+            tools:node="remove" />
     </application>
 
 </manifest>

@@ -126,35 +126,14 @@ adb shell am force-stop com.topviewclub.crawling
 
 
 
-- 点击/滑动屏幕的指定位置
+公众号采集过程中的点击、长按、滑动、返回和回桌面均由无障碍服务完成：
 
-```shell
-adb shell input swipe <start_x> <start_y> <end_x> <end_y>
-```
+- 可访问节点优先使用 `AccessibilityNodeInfo.ACTION_CLICK` / `ACTION_LONG_CLICK`
+- 自绘页面使用无障碍服务的 `dispatchGesture()`
+- 页面切换只在收到无障碍事件确认后推进
 
-
-
-- 输入返回按键
-
-```shell
-adb shell input keyevent BACK
-```
-
-
-
-- 输入 HOME 键
-
-```shell
-adb shell input keyevent HOME
-```
-
-
-
-- 模拟按一下电源键
-
-```shell
-adb shell input keyevent 26
-```
+不要使用 `adb shell input tap/swipe/keyevent` 代替采集动作；ADB 仅用于安装、授权
+和读取诊断信息。
 
 
 
@@ -656,4 +635,3 @@ adb shell am broadcast -a com.topviewclub.crawling.broadcast.START_AAOS -p com.t
 ```shell
 adb logcat * | find "AAOS"
 ```
-

@@ -14,7 +14,9 @@ val applicationIdSuffixForTesting = providers.gradleProperty("APPLICATION_ID_SUF
     }
 
 android {
+    namespace = "com.topviewclub.crawling"
     compileSdk = Build.compileSdk
+    buildToolsVersion = "35.0.0"
 
     defaultConfig {
         applicationId = Build.applicationId + applicationIdSuffixForTesting
@@ -42,8 +44,8 @@ android {
     kotlinOptions {
         jvmTarget = "1.8"
     }
-    viewBinding {
-        isEnabled = true
+    buildFeatures {
+        viewBinding = true
     }
 }
 

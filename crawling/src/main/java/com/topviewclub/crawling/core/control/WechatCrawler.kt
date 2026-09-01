@@ -2,7 +2,6 @@ package com.topviewclub.crawling.core.control
 
 import com.topviewclub.common.base.appContext
 import com.topviewclub.common.mq.RabbitTaskContext
-import com.topviewclub.common.util.startWechatScanActivity
 import com.topviewclub.crawling.service.wechat.check.CheckQRCodeOperationService
 import com.topviewclub.crawling.wechat.auto.AutoChatOperationService
 import com.topviewclub.crawling.wechat.official.OfficialOperationService
@@ -27,7 +26,9 @@ internal abstract class AbstractWechatCrawler : Crawler() {
     ) {
         initData(target, tag, startDate, endDate, rabbitTaskContext)
         startAccessibilityService()
-        appContext.startWechatScanActivity()
+        // 微信扫一扫由 StartWechatScanActivity 通过无障碍服务打开。
+        // 这里不能从后台 Context 直接 startActivity：Android 14/MIUI 会拦截
+        // 后台启动 Activity，导致任务在无障碍服务尚未收到事件前就卡死。
     }
 
     abstract fun initData(

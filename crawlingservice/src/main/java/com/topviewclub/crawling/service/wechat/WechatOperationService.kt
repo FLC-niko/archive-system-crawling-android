@@ -34,7 +34,8 @@ abstract class WechatOperationService : AutoOperationService() {
         SelectQRCodeFolder(),
         SelectPhoto(),
         EnterOfficialHome(),
-        CheckTargetAccount()
+        CheckTargetAccount(),
+        ReturnToWechatLauncher(),
     )
 
     override var targetActionName: String = "StartWechatScanActivity"

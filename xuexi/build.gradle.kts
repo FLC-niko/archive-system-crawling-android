@@ -4,7 +4,9 @@ plugins {
 }
 
 android {
+    namespace = "com.topviewclub.crawling.xuexi"
     compileSdk = Build.compileSdk
+    buildToolsVersion = "35.0.0"
 
     defaultConfig {
         minSdk = Build.minSdk
