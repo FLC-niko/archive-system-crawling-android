@@ -6,13 +6,14 @@ object Build {
     // 每次旁装真机验证递增，避免部分 MIUI 包管理器对同 versionCode 的
     // streamed install 返回 Success 但仍保留旧 base.apk。
     const val versionCode = 2
+    const val versionCode = 3
     const val versionName = "你猜"
 }
 
 object Dependencies {
     object AndroidX {
-        const val core = "androidx.core:core-ktx:1.7.0"
-        const val appCompat = "androidx.appcompat:appcompat:1.4.1"
+        const val core = "androidx.core:core-ktx:1.9.0"
+        const val appCompat = "androidx.appcompat:appcompat:1.6.1"
         const val runtime = "androidx.lifecycle:lifecycle-runtime-ktx:2.4.1"
     }
 
@@ -30,7 +31,7 @@ object Dependencies {
     }
 
     object View {
-        const val material = "com.google.android.material:material:1.6.1"
+        const val material = "com.google.android.material:material:1.12.0"
     }
 
     object Rikka {

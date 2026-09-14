@@ -1,10 +1,13 @@
 package com.topviewclub.crawling.core.ui
 
 import android.content.Intent
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.view.View
+import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.topviewclub.common.util.isDarkMode
+import com.topviewclub.common.util.setStatusBarTextColor
 import com.topviewclub.common.util.toast
 import com.topviewclub.crawling.core.databinding.ActivityAcvideoListBinding
 import com.topviewclub.crawling.wechat.auto.room.ACVideoDao
@@ -25,6 +28,12 @@ class ACVideoListActivity : AppCompatActivity(), CoroutineScope by MainScope() {
         binding = ActivityAcvideoListBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        setStatusBarTextColor(!isDarkMode)
+
+        binding.toolbar.setNavigationOnClickListener {
+            finish()
+        }
+
         adapter = ACVideoAdapter(acVideos) {
             startActivity(Intent(this, ACVideoDetailsActivity::class.java).apply {
                 putExtra("ac_video", acVideos[it])
@@ -41,6 +50,9 @@ class ACVideoListActivity : AppCompatActivity(), CoroutineScope by MainScope() {
         }
 
         val numberOfWechat = intent.getStringExtra("number_of_wechat")
+        if (numberOfWechat != null) {
+            binding.toolbar.subtitle = "微信号: $numberOfWechat 的视频列表"
+        }
 
         launch {
             withContext(Dispatchers.IO) {
@@ -55,6 +67,7 @@ class ACVideoListActivity : AppCompatActivity(), CoroutineScope by MainScope() {
             } else {
                 toast("展示微信号 $numberOfWechat 请求的视频列表")
             }
+            binding.layoutEmpty.visibility = if (acVideos.isEmpty()) View.VISIBLE else View.GONE
             @Suppress("NotifyDataSetChanged")
             adapter.notifyDataSetChanged()
         }

@@ -4,30 +4,76 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@color/md_theme_background"
+    android:fitsSystemWindows="true"
     android:orientation="vertical"
     tools:context=".ui.ACLimitedListActivity">
 
-    <TextView
+    <com.google.android.material.appbar.AppBarLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="4dp"
-        android:background="?attr/colorPrimary"
-        android:gravity="center"
-        android:paddingVertical="12dp"
-        android:text="AC 服务 - 用户列表"
-        android:textColor="#FFFFFFFF"
-        android:textSize="20sp"
-        android:textStyle="bold" />
+        android:background="@color/md_theme_surface"
+        app:elevation="0dp">
 
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginHorizontal="32dp"
-        android:text="默认按时间倒序排序" />
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="?attr/actionBarSize"
+            app:navigationIcon="@drawable/ic_arrow_back"
+            app:subtitle="默认按时间倒序排序"
+            app:subtitleTextAppearance="@style/TextAppearance.Material3.BodySmall"
+            app:subtitleTextColor="@color/text_secondary"
+            app:title="AC 用户频次统计"
+            app:titleTextAppearance="@style/TextAppearance.Material3.TitleLarge"
+            app:titleTextColor="@color/text_primary" />
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/rv_acl_list"
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@color/md_theme_outlineVariant" />
+
+    </com.google.android.material.appbar.AppBarLayout>
+
+    <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="match_parent">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rv_acl_list"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="12dp" />
+
+        <!-- Empty State Container -->
+        <LinearLayout
+            android:id="@+id/layout_empty"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <ImageView
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:src="@drawable/ic_inbox_empty"
+                app:tint="@color/text_tertiary"
+                tools:ignore="ContentDescription" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="暂无用户统计数据"
+                android:textColor="@color/text_secondary"
+                android:textSize="15sp" />
+
+        </LinearLayout>
+
+    </FrameLayout>
 
 </LinearLayout>

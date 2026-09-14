@@ -1,9 +1,11 @@
 package com.topviewclub.crawling.core.ui
 
 import android.content.Intent
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import androidx.appcompat.app.AppCompatActivity
+import com.topviewclub.common.util.isDarkMode
 import com.topviewclub.common.util.saveClipboardContent
+import com.topviewclub.common.util.setStatusBarTextColor
 import com.topviewclub.common.util.toast
 import com.topviewclub.crawling.core.databinding.ActivityAcvideoDetailsBinding
 import com.topviewclub.crawling.wechat.auto.room.ACLimitedDao
@@ -22,6 +24,12 @@ class ACVideoDetailsActivity : AppCompatActivity(), CoroutineScope by MainScope(
         binding = ActivityAcvideoDetailsBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        setStatusBarTextColor(!isDarkMode)
+
+        binding.toolbar.setNavigationOnClickListener {
+            finish()
+        }
+
         val video = intent.getSerializableExtra("ac_video") as ACVideo
 
         binding.btnCopyUrl.setOnClickListener {
@@ -31,11 +39,13 @@ class ACVideoDetailsActivity : AppCompatActivity(), CoroutineScope by MainScope(
 
         binding.tvVideoDetails.text = video.let {
             """
-                前缀 | ${it.requestType}
-                后缀 | ${it.requestCode}
-                用户 | ${it.numberOfWechat}
-                链接 | ${it.url}
-                时间 | ${formatterYMD.format(Date(it.time))}
+                任务前缀：${it.requestType}
+                任务识别码：${it.requestCode}
+                请求微信号：${it.numberOfWechat}
+                抓取时间：${formatterYMD.format(Date(it.time))}
+
+                视频直链：
+                ${it.url}
             """.trimIndent()
         }
 
@@ -45,24 +55,22 @@ class ACVideoDetailsActivity : AppCompatActivity(), CoroutineScope by MainScope(
                     video.numberOfWechat
                 ).firstOrNull() ?: ACLimited(
                     "未找到该用户",
-                    "未找到该用户",
-                    -1,
-                    -1,
-                    -1,
-                    -1,
+                    video.numberOfWechat,
+                    0,
+                    0,
+                    0,
+                    0,
                     0L
                 )
             }
 
             binding.tvUserDetails.text = user.let {
                 """
-                    微信名 | ${it.nameOfWechat}
-                    微信号 | ${it.numberOfWechat}
-                    今天请求成功数 | ${it.requestCount}
-                    今天请求错误数 | ${it.errorCount}
-                    总共请求成功数 | ${it.totalRequest}
-                    总共请求错误数 | ${it.totalError}
-                    更新时间 | ${formatterYMD.format(Date(it.updateTime))}
+                    微信昵称：${it.nameOfWechat}
+                    微信号：${it.numberOfWechat}
+                    今日统计：成功 ${it.requestCount} 次 / 失败 ${it.errorCount} 次
+                    累计统计：成功 ${it.totalRequest} 次 / 失败 ${it.totalError} 次
+                    更新时间：${formatterYMD.format(Date(it.updateTime))}
                 """.trimIndent()
             }
 
@@ -84,7 +92,7 @@ class ACVideoDetailsActivity : AppCompatActivity(), CoroutineScope by MainScope(
     }
 
     private val formatterYMD = SimpleDateFormat(
-        "yyyy年M月d日HH:mm:ss.SSS",
+        "yyyy年M月d日 HH:mm:ss.SSS",
         Locale.getDefault()
     )
 }

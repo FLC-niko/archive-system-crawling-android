@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Brand Primary (Modern Indigo) -->
+    <color name="md_theme_primary">#4F46E5</color>
+    <color name="md_theme_onPrimary">#FFFFFF</color>
+    <color name="md_theme_primaryContainer">#EEF2FF</color>
+    <color name="md_theme_onPrimaryContainer">#312E81</color>
+
+    <!-- Secondary (Sky Blue / Cyan) -->
+    <color name="md_theme_secondary">#0284C7</color>
+    <color name="md_theme_onSecondary">#FFFFFF</color>
+    <color name="md_theme_secondaryContainer">#E0F2FE</color>
+    <color name="md_theme_onSecondaryContainer">#0369A1</color>
+
+    <!-- Tertiary (Emerald) -->
+    <color name="md_theme_tertiary">#059669</color>
+    <color name="md_theme_onTertiary">#FFFFFF</color>
+    <color name="md_theme_tertiaryContainer">#D1FAE5</color>
+    <color name="md_theme_onTertiaryContainer">#065F46</color>
+
+    <!-- Surfaces & Backgrounds -->
+    <color name="md_theme_background">#F8FAFC</color>
+    <color name="md_theme_onBackground">#0F172A</color>
+    <color name="md_theme_surface">#F8FAFC</color>
+    <color name="md_theme_onSurface">#0F172A</color>
+    <color name="md_theme_surfaceVariant">#F1F5F9</color>
+    <color name="md_theme_onSurfaceVariant">#475569</color>
+
+    <!-- Surface Containers -->
+    <color name="md_theme_surfaceContainer">#FFFFFF</color>
+    <color name="md_theme_surfaceContainerLow">#F8FAFC</color>
+    <color name="md_theme_surfaceContainerHigh">#F1F5F9</color>
+    <color name="md_theme_surfaceContainerHighest">#E2E8F0</color>
+
+    <!-- Outlines & Dividers -->
+    <color name="md_theme_outline">#CBD5E1</color>
+    <color name="md_theme_outlineVariant">#E2E8F0</color>
+
+    <!-- Semantic Stat Cards (Day) -->
+    <color name="stat_success_container">#ECFDF5</color>
+    <color name="stat_success_text">#047857</color>
+    <color name="stat_success_badge">#D1FAE5</color>
+
+    <color name="stat_completed_container">#EFF6FF</color>
+    <color name="stat_completed_text">#1D4ED8</color>
+    <color name="stat_completed_badge">#DBEAFE</color>
+
+    <color name="stat_enqueuing_container">#FFFBEB</color>
+    <color name="stat_enqueuing_text">#B45309</color>
+    <color name="stat_enqueuing_badge">#FEF3C7</color>
+
+    <color name="stat_rate_container">#FAF5FF</color>
+    <color name="stat_rate_text">#6D28D9</color>
+    <color name="stat_rate_badge">#EDE9FE</color>
+
+    <!-- Card & Component Overrides -->
+    <color name="card_surface">#FFFFFF</color>
+    <color name="card_stroke">#E2E8F0</color>
+    <color name="card_surface_tonal">#F8FAFC</color>
+    <color name="text_primary">#0F172A</color>
+    <color name="text_secondary">#475569</color>
+    <color name="text_tertiary">#94A3B8</color>
+    <color name="tag_bg">#F1F5F9</color>
+
+    <!-- Status Bar / Nav Bar -->
+    <color name="status_bar_bg">#F8FAFC</color>
+    <color name="nav_bar_bg">#F8FAFC</color>
+</resources>
+

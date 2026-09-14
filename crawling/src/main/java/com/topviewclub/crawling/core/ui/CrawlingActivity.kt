@@ -13,6 +13,7 @@ import com.topviewclub.common.log.logI
 import com.topviewclub.common.shizuku.*
 import com.topviewclub.common.storage.DocumentFileUtils
 import com.topviewclub.common.storage.video.WECHAT_CACHE_FOLDER
+import com.topviewclub.common.util.isDarkMode
 import com.topviewclub.common.util.setStatusBarTextColor
 import com.topviewclub.common.util.toast
 import com.topviewclub.common.wirebare.prepareProxy
@@ -61,7 +62,7 @@ class CrawlingActivity : AppCompatActivity() {
         //设置activity常量
         getActivity(this)
 
-        setStatusBarTextColor(false)
+        setStatusBarTextColor(!isDarkMode)
 
 //        updateQRCode()
 

@@ -1,10 +1,13 @@
 package com.topviewclub.crawling.core.ui
 
 import android.content.Intent
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.view.View
+import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.topviewclub.common.util.isDarkMode
+import com.topviewclub.common.util.setStatusBarTextColor
 import com.topviewclub.common.util.toast
 import com.topviewclub.crawling.core.databinding.ActivityAclimitedListBinding
 import com.topviewclub.crawling.wechat.auto.room.ACLimitedDao
@@ -23,6 +26,12 @@ class ACLimitedListActivity : AppCompatActivity(), CoroutineScope by MainScope()
         super.onCreate(savedInstanceState)
         binding = ActivityAclimitedListBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        setStatusBarTextColor(!isDarkMode)
+
+        binding.toolbar.setNavigationOnClickListener {
+            finish()
+        }
 
         adapter = ACLimitedAdapter(acLimiteds) {
             startActivity(Intent(this, ACVideoListActivity::class.java).apply {
@@ -44,6 +53,7 @@ class ACLimitedListActivity : AppCompatActivity(), CoroutineScope by MainScope()
                 acLimiteds.addAll(ACLimitedDao.selectAllLimited())
             }
             toast("展示所有用户列表")
+            binding.layoutEmpty.visibility = if (acLimiteds.isEmpty()) View.VISIBLE else View.GONE
             @Suppress("NotifyDataSetChanged")
             adapter.notifyDataSetChanged()
         }
