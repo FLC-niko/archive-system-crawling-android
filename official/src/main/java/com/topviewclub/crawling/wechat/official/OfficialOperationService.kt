@@ -10,17 +10,22 @@ import com.topviewclub.crawling.service.action.ActionException
 import com.topviewclub.crawling.service.wechat.WechatOperationService
 import com.topviewclub.crawling.wechat.official.action.*
 
+data class OfficialTaskSession(
+    val serviceTag: String?,
+    val startDate: Long = Long.MIN_VALUE,
+    val endDate: Long = Long.MAX_VALUE,
+    val targetAccount: String?,
+    val rabbitTaskContext: RabbitTaskContext? = null,
+)
+
 class OfficialOperationService : WechatOperationService() {
 
     companion object {
-        private var tag: String? = null
-        private var targetStartDate = Long.MIN_VALUE
-        private var targetEndDate: Long = Long.MAX_VALUE
-        private var targetAccount: String? = null
-        private var preparedRabbitTaskContext: RabbitTaskContext? = null
+        @Volatile
+        private var session: OfficialTaskSession? = null
 
         /**
-         * 开启服务前调用此函数初始化参数
+         * 开启服务前调用此函数初始化任务会话参数
          * */
         fun prepare(
             serviceTag: String?,
@@ -29,36 +34,41 @@ class OfficialOperationService : WechatOperationService() {
             account: String?,
             rabbitTaskContext: RabbitTaskContext? = null,
         ) {
-            tag = serviceTag
-            targetStartDate = startDate
-            targetEndDate = endDate
-            targetAccount = account
-            preparedRabbitTaskContext = rabbitTaskContext
+            session = OfficialTaskSession(
+                serviceTag = serviceTag,
+                startDate = startDate,
+                endDate = endDate,
+                targetAccount = account,
+                rabbitTaskContext = rabbitTaskContext,
+            )
             officialArticleSetInternal.clear()
+        }
 
+        fun clearSession() {
+            session = null
+            officialArticleSetInternal.clear()
         }
     }
 
     override val crawlServiceType: String = TaskCrawlingType.TYPE_OFFICIAL
 
     override val aaosTask: AAOSTask
-        get() = AAOSTask(
-            TaskCrawlingType.TYPE_OFFICIAL,
-            tag,
-            targetAccount,
-            startDate,
-            endDate,
-            rabbitTaskContext = preparedRabbitTaskContext,
-        )
-
-    override val target: String
         get() {
-            val value = targetAccount
-            value ?: throw ActionException(TaskResultType.TARGET_IS_NULL)
-            return value
+            val s = session
+            return AAOSTask(
+                TaskCrawlingType.TYPE_OFFICIAL,
+                s?.serviceTag,
+                s?.targetAccount,
+                s?.startDate ?: Long.MIN_VALUE,
+                s?.endDate ?: Long.MAX_VALUE,
+                rabbitTaskContext = s?.rabbitTaskContext,
+            )
         }
 
-    override val serviceTag: String? get() = tag
+    override val target: String
+        get() = session?.targetAccount ?: throw ActionException(TaskResultType.TARGET_IS_NULL)
+
+    override val serviceTag: String? get() = session?.serviceTag
 
     override val firstlyTargetActionName: String = "HomingOfficialList"
 
@@ -76,9 +86,9 @@ class OfficialOperationService : WechatOperationService() {
         EnterWechatLauncher()
     )
 
-    override val startDate: Long get() = targetStartDate
+    override val startDate: Long get() = session?.startDate ?: Long.MIN_VALUE
 
-    override val endDate: Long get() = targetEndDate
+    override val endDate: Long get() = session?.endDate ?: Long.MAX_VALUE
 
     override fun onCreate() {
         addOnServiceDestroyListener { result ->
@@ -98,8 +108,14 @@ class OfficialOperationService : WechatOperationService() {
                         message = "公众号抓取服务失败: ${result.msg}",
                     )
             }
+            clearSession()
         }
         super.onCreate()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        clearSession()
     }
 
     override fun onUnexpectedServiceDestroy() {
@@ -108,6 +124,7 @@ class OfficialOperationService : WechatOperationService() {
             code = TaskResultType.SERVICE_DESTROY_UNEXPECTEDLY,
             message = "公众号无障碍服务意外销毁",
         )
+        clearSession()
     }
 
 }

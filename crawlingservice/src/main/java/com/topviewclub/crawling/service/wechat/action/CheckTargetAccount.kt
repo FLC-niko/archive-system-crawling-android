@@ -7,7 +7,7 @@ import com.topviewclub.crawling.service.AutoOperationService
 import com.topviewclub.crawling.service.action.Action
 import com.topviewclub.crawling.service.action.ActionException
 import com.topviewclub.crawling.service.findNodeOrNull
-import com.topviewclub.crawling.service.wechat.WechatOperationService
+import com.topviewclub.crawling.service.wechat.WechatActionHost
 import com.topviewclub.common.log.logI
 
 /**
@@ -29,16 +29,21 @@ internal class CheckTargetAccount : Action {
             service.rootInActiveWindow?.className?.toString()?.contains("WebView", ignoreCase = true) == true ||
             service.currentWechatActivity?.contains("WebView", ignoreCase = true) == true
 
+        val nextAction = resolveNextAction(service)
+
         if (isContactInfo || inWebView) {
             logI(actionName, "已确认任务进入公众号主页: target=${service.target}, contactInfo=$isContactInfo, webView=$inWebView")
             service.resumeServiceDelay(event, 0L)
-            return (service as WechatOperationService).firstlyTargetActionName
+            return nextAction
         }
         val root = service.rootInActiveWindow ?: return actionName
         return if (match(service.target, root))
-            (service as WechatOperationService).firstlyTargetActionName
+            nextAction
         else actionName
     }
+
+    private fun resolveNextAction(service: AutoOperationService): String =
+        (service as? WechatActionHost)?.firstlyTargetActionName ?: "HomingOfficialList"
 
     private fun match(
         targetAccount: String,

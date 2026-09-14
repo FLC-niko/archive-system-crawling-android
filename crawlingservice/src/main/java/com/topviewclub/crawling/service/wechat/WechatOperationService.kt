@@ -15,14 +15,14 @@ import com.topviewclub.crawling.service.wechat.action.*
 /**
  * 微信模拟点击无障碍服务，执行默认责任链可以保证到达指定公众号主页
  * */
-abstract class WechatOperationService : AutoOperationService() {
+abstract class WechatOperationService : AutoOperationService(), WechatActionHost {
 
     /**
      * 自定义 [Action] ，将会被添加到 [actionList] 后，默认 [actionList] 保证到达公众号主页面
      * */
     abstract val wechatChain: List<Action>
 
-    abstract val firstlyTargetActionName: String
+    abstract override val firstlyTargetActionName: String
 
     /**
      * 微信抓取责任链，执行完毕后保证到达公众号主页
