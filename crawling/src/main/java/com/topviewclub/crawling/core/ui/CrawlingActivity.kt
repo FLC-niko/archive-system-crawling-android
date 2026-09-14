@@ -16,6 +16,7 @@ import com.topviewclub.common.storage.video.WECHAT_CACHE_FOLDER
 import com.topviewclub.common.util.setStatusBarTextColor
 import com.topviewclub.common.util.toast
 import com.topviewclub.common.wirebare.prepareProxy
+import com.topviewclub.common.mq.RabbitMQClient
 import com.topviewclub.crawling.core.control.TaskDispatcher
 import com.topviewclub.crawling.core.databinding.ActivityCrawlingBinding
 import org.github.kokomi.wirebare.common.WireBare
@@ -127,10 +128,36 @@ class CrawlingActivity : AppCompatActivity() {
                 )
             }
 
+            val prefs = getSharedPreferences("aaos_settings", MODE_PRIVATE)
+            val initialStandalone = prefs.getBoolean("standalone_mode", true)
+            switchStandaloneMode.isChecked = initialStandalone
+            RabbitMQClient.setStandaloneMode(initialStandalone)
+            tvStandaloneModeDesc.text = if (initialStandalone) {
+                "开启：直接从 RabbitMQ 消费主任务队列\n(当前状态：独立模式)"
+            } else {
+                "关闭：仅从死信 / 重试队列消费任务\n(当前状态：兜底模式)"
+            }
+
+            switchStandaloneMode.setOnCheckedChangeListener { _, isChecked ->
+                prefs.edit().putBoolean("standalone_mode", isChecked).apply()
+                RabbitMQClient.setStandaloneMode(isChecked)
+                tvStandaloneModeDesc.text = if (isChecked) {
+                    "开启：直接从 RabbitMQ 消费主任务队列\n(当前状态：独立模式)"
+                } else {
+                    "关闭：仅从死信 / 重试队列消费任务\n(当前状态：兜底模式)"
+                }
+                toast(if (isChecked) "已切换为独立模式：消费主任务队列" else "已切换为兜底模式：消费死信/重试队列")
+            }
+
             btnStartAaos.setOnClickListener {
                 btnStartAaos.isEnabled = false
                 TaskDispatcher.init()
                 toast("AAOS 已自动启动，正在等待公众号任务")
+                moveTaskToBack(true)
+            }
+
+            if (intent.getBooleanExtra("auto_start", false)) {
+                btnStartAaos.performClick()
             }
         }
 

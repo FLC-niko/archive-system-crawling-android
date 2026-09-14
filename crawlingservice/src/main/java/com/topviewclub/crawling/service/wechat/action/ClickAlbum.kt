@@ -18,9 +18,11 @@ class ClickAlbum : Action {
     private companion object {
         private const val CLICK_ALBUM_DESCRIPTION = "相册，按钮"
         // Xiaomi 22041216C / 微信 8.0.76 的自绘相册按钮中心。
-        // 屏幕为 1080x2460 时按钮中心精确为 (956, 2135)，对应比率为 0.885f, 0.868f。
-        private const val ALBUM_X_RATIO = 0.885f
-        private const val ALBUM_Y_RATIO = 0.868f
+        // 正常带有底部标签栏的 BaseScanUI 上中心为 (942, 2097)，对应比率 0.872f, 0.853f。
+        // 无底部标签栏时中心为 (938, 2284)，对应比率 0.869f, 0.928f。
+        private const val ALBUM_X_RATIO = 0.872f
+        private const val ALBUM_Y_RATIO = 0.853f
+        private const val ALBUM_Y_FALLBACK_RATIO = 0.928f
         private const val SCAN_PAGE_SETTLE_MS = 1000L
     }
 
@@ -104,15 +106,36 @@ class ClickAlbum : Action {
             return "SelectPhoneOrOpenFolderList"
         }
 
-        // 显式启动微信时会先经过 LauncherUI。只有 AccessibilityEvent 或当前
-        // 活动根节点明确报告 BaseScanUI/scanner.ui，才能开始相册点击计时；
-        // 微信包名或空壳根节点本身不足以证明扫一扫页面已经稳定。
+        // 显式启动微信时会先经过 LauncherUI。只有当前活动窗口是微信，
+        // 且 AccessibilityEvent 或当前根节点明确报告 BaseScanUI/scanner.ui，
+        // 才能开始相册点击计时。
         val rootClassName = currentRoot?.className?.toString().orEmpty()
-        val scanPageVisible = event.isWechatScanContext() ||
-                rootClassName.contains("BaseScanUI", ignoreCase = true) ||
-                rootClassName.contains("scanner.ui", ignoreCase = true)
+        val isWechatActive = currentRoot?.packageName?.toString() == WECHAT_PACKAGE_NAME ||
+                event.packageName?.toString() == WECHAT_PACKAGE_NAME ||
+                service.isWechatScanWindowVisible()
+        val scanPageVisible = isWechatActive && (
+            event.isWechatScanContext() ||
+            rootClassName.contains("BaseScanUI", ignoreCase = true) ||
+            rootClassName.contains("scanner.ui", ignoreCase = true) ||
+            service.isWechatScanWindowVisible() ||
+            !service.isWechatPhotoPickerContext()
+        )
+
+        // 如果已经提交过相册点击手势，且当前已离开 BaseScanUI，直接进入选择器链路
+        if (retryState.currentAttempts > 0 && !scanPageVisible && isWechatActive) {
+            scanPageConfirmed = false
+            albumClickReadyAt = 0L
+            retryState.reset()
+            logI(actionName, "点击相册后已离开 BaseScanUI，进入选择器责任链")
+            service.resumeServiceDelay(event, 350L)
+            return "SelectPhoneOrOpenFolderList"
+        }
+
         if (!scanPageConfirmed) {
-            if (!scanPageVisible) return actionName
+            if (!scanPageVisible) {
+                retryState.scheduleProbe(service, event)
+                return actionName
+            }
 
             scanPageConfirmed = true
             retryState.reset()
@@ -123,7 +146,17 @@ class ClickAlbum : Action {
         }
 
         val settleRemaining = albumClickReadyAt - SystemClock.uptimeMillis()
-        if (settleRemaining > 0L) return actionName
+        if (settleRemaining > 0L) {
+            service.resumeServiceDelay(event, settleRemaining)
+            return actionName
+        }
+
+        // 绝不点击非微信界面（如桌面或系统相机）
+        if (!isWechatActive) {
+            logI(actionName, "当前活动窗口非微信 (pkg=${currentRoot?.packageName})，跳过手势并等待")
+            retryState.scheduleProbe(service, event)
+            return actionName
+        }
 
         val root = currentRoot
         val target = root?.findNodeOrNull {
@@ -140,10 +173,11 @@ class ClickAlbum : Action {
 
         // BaseScanUI 可能只暴露一个空根节点，使用无障碍服务手势兜底；
         // dispatchGesture=true 仅表示系统接收，不能代表页面已切换。
-        val dispatched = retryState.dispatch(service, event, ALBUM_X_RATIO, ALBUM_Y_RATIO) {
-            logI(actionName, "相册无障碍手势完成: $it")
+        val targetY = if (retryState.currentAttempts % 2 == 0) ALBUM_Y_FALLBACK_RATIO else ALBUM_Y_RATIO
+        val dispatched = retryState.dispatch(service, event, ALBUM_X_RATIO, targetY) {
+            logI(actionName, "相册无障碍手势完成: $it (yRatio=$targetY)")
         }
-        logI(actionName, "相册节点不可见，提交无障碍坐标手势 accepted=$dispatched")
+        logI(actionName, "相册节点不可见，提交无障碍坐标手势 accepted=$dispatched (yRatio=$targetY)")
         return actionName
     }
 

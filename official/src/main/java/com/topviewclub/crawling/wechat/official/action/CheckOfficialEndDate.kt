@@ -19,6 +19,8 @@ class CheckOfficialEndDate : Action {
 
     override val actionName: String = "CheckOfficialEndDate"
 
+    private var lastServiceTag: String? = null
+
     @Volatile
     private var captureInFlight = false
 
@@ -31,10 +33,21 @@ class CheckOfficialEndDate : Action {
     @Volatile
     private var emptyDateRetryCount = 0
 
+    fun reset() {
+        captureInFlight = false
+        pendingNextAction = null
+        motionWakeScheduled = false
+        emptyDateRetryCount = 0
+    }
+
     override fun execute(
         service: AutoOperationService,
         event: AccessibilityEvent
     ): String {
+        if (lastServiceTag != service.serviceTag) {
+            lastServiceTag = service.serviceTag
+            reset()
+        }
         val motionRemaining = OfficialListMotionGate.remainingMs()
         if (motionRemaining > 0L) {
             if (!motionWakeScheduled) {
@@ -57,7 +70,8 @@ class CheckOfficialEndDate : Action {
         val root = service.rootInActiveWindow
         val pageClass = event.className?.toString().orEmpty()
 
-        if (root == null || root.childCount == 0) {
+        val recyclerView = root?.findNodeOrNull { className == CLS_RECYCLER_VIEW }
+        if (recyclerView == null) {
             recognizeEmptyAccessibilityPage(service, root, pageClass)
             return actionName
         }
@@ -144,7 +158,12 @@ class CheckOfficialEndDate : Action {
                     }
                 } else {
                     // 4. 屏幕中没有日期，检查是否是列表头部或需要防误滑保护
-                    val isListPage = OfficialPageDetector.isOfficialListPage(lines, root, pageClass)
+                    val isListPage = OfficialPageDetector.isOfficialListPage(
+                        lines,
+                        root,
+                        pageClass,
+                        currentActivity = service.currentWechatActivity,
+                    )
                     if (isListPage) {
                         emptyDateRetryCount = 0
                         pendingNextAction = if (service.endDate >= System.currentTimeMillis()) {

@@ -31,6 +31,7 @@ class EnterOfficialArticle : Action {
 
     private var stepInternal = 0
     private val clickedArticles = mutableListOf<ClickedArticle>()
+    private var lastServiceTag: String? = null
 
     @Volatile
     private var captureInFlight = false
@@ -50,10 +51,25 @@ class EnterOfficialArticle : Action {
     @Volatile
     private var motionWakeScheduled = false
 
+    fun reset() {
+        stepInternal = 0
+        clickedArticles.clear()
+        captureInFlight = false
+        pendingNextAction = null
+        articleOpening = false
+        openingArticle = null
+        openingAttemptId = 0
+        motionWakeScheduled = false
+    }
+
     override fun execute(
         service: AutoOperationService,
         event: AccessibilityEvent
     ): String {
+        if (lastServiceTag != service.serviceTag) {
+            lastServiceTag = service.serviceTag
+            reset()
+        }
         pendingNextAction?.let { next ->
             pendingNextAction = null
             service.resumeCurrentAction()
@@ -87,11 +103,7 @@ class EnterOfficialArticle : Action {
         }
 
         val root = service.rootInActiveWindow
-        if (root == null || root.childCount == 0) {
-            recognizeAndOpenArticle(service)
-            return actionName
-        }
-        val recyclerView = root.findNodeOrNull {
+        val recyclerView = root?.findNodeOrNull {
             className == CLS_RECYCLER_VIEW
         } ?: run {
             recognizeAndOpenArticle(service)
@@ -140,7 +152,12 @@ class EnterOfficialArticle : Action {
             service = service,
             onSuccess = { lines ->
                 // 检测是否仍在文章页面（包括元数据、正文及底部UI元素）
-                val stillInArticle = OfficialPageDetector.isArticleDetailPage(lines, root)
+                val stillInArticle = OfficialPageDetector.isArticleDetailPage(
+                    lines,
+                    root,
+                    pageClass = service.currentWechatActivity.orEmpty(),
+                    currentActivity = service.currentWechatActivity,
+                )
 
                 if (stillInArticle) {
                     logI(actionName, "OCR 检测到文章特有元素，页面仍在文章中，转回返回动作")
@@ -165,7 +182,12 @@ class EnterOfficialArticle : Action {
                         lines.any { it.text.contains(OfficialPageDetector.THE_END_TEXT) }
                     ) {
                         "WriteOfficialArticle"
-                    } else if (OfficialPageDetector.isOfficialListPage(lines, root)) {
+                    } else if (OfficialPageDetector.isOfficialListPage(
+                        lines,
+                        root,
+                        pageClass = service.currentWechatActivity.orEmpty(),
+                        currentActivity = service.currentWechatActivity,
+                    )) {
                         "ScrollOfficialList"
                     } else {
                         // 既未识别到可点击文章，也无列表特征：转回返回动作防止在文章正文内乱滑

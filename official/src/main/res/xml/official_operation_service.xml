@@ -7,4 +7,4 @@
     android:canRetrieveWindowContent="true"
     android:canTakeScreenshot="true"
     android:description="@string/official_operation_service"
-    android:packageNames="com.tencent.mm" />
+    android:packageNames="com.tencent.mm,com.miui.securitycore" />

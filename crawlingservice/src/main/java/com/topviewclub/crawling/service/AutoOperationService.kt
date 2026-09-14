@@ -25,6 +25,7 @@ import com.topviewclub.crawling.service.handler.AccessibilityEventHandler
 import com.topviewclub.crawling.service.handler.ImmediatelyProcessHandler
 import com.topviewclub.crawling.service.action.Action
 import com.topviewclub.crawling.service.action.ActionException
+import com.topviewclub.crawling.service.wechat.action.WechatSecurityRiskInterceptor
 import java.lang.ref.WeakReference
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
@@ -106,6 +107,12 @@ abstract class AutoOperationService : AccessibilityService() {
      */
     var lastTargetActionName: String = ActionType.ActionNull
         protected set
+
+    /**
+     * 当前微信前台 Activity 类名（从 TYPE_WINDOW_STATE_CHANGED 实时更新）
+     */
+    var currentWechatActivity: String? = null
+        internal set
 
     /**
      * 爬取起始日期
@@ -302,6 +309,14 @@ abstract class AutoOperationService : AccessibilityService() {
 
     @CallSuper
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
+        val pkg = event.packageName?.toString()
+        val cls = event.className?.toString()
+        if (pkg == "com.tencent.mm" && !cls.isNullOrBlank()) {
+            if (cls.endsWith("UI") || cls.contains(".ui.")) {
+                currentWechatActivity = cls
+                logI("AutoOperationService", "WeChat Activity 更新: $cls (eventType=${event.eventType})")
+            }
+        }
         if (!initializeForCurrentTask()) return
         eventHandler.onAccessibilityEvent(this, event)
     }
@@ -368,6 +383,12 @@ abstract class AutoOperationService : AccessibilityService() {
             alive = true
             // 说明服务已经停止
             if (targetActionName == ActionType.ActionDead) return false
+
+            // 全局拦截微信安全风险/短信验证弹窗，点击左上角关闭
+            if (WechatSecurityRiskInterceptor.handle(this@AutoOperationService, event)) {
+                return true
+            }
+
             val nextActionName = actionMap[targetActionName]?.execute(
                 this@AutoOperationService,
                 event
@@ -494,7 +515,9 @@ abstract class AutoOperationService : AccessibilityService() {
     override fun onCreate() {
         super.onCreate()
         connectedServices[crawlServiceType] = WeakReference(this)
-        if (!initializeForCurrentTask()) {
+        if (initializeForCurrentTask()) {
+            dispatchSyntheticEvent()
+        } else {
             logI(
                 this@AutoOperationService.className,
                 "No matching task yet; accessibility service is waiting",
@@ -519,14 +542,18 @@ abstract class AutoOperationService : AccessibilityService() {
             val builder = Notification.Builder(this, channelId).setContentTitle(channelId)
                 .setContentText(channelId)
             val notification = builder.build()
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                startForeground(
-                    notificationId,
-                    notification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
-                )
-            } else {
-                startForeground(notificationId, notification)
+            runCatching {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    startForeground(
+                        notificationId,
+                        notification,
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
+                    )
+                } else {
+                    startForeground(notificationId, notification)
+                }
+            }.onFailure {
+                logI(className, "startForegroundNotification failed (ignored): ${it.message}")
             }
         }
     }

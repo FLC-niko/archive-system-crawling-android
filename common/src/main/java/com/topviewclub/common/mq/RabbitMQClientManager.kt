@@ -647,7 +647,15 @@ class RabbitMQClientManager(
 
     private fun removeConsumer(consumer: Consumer) {
         val spec = consumerSpecs[consumer.queueName]
-        if (spec?.consumer === consumer) consumerSpecs.remove(consumer.queueName, spec)
+        if (spec?.consumer === consumer) {
+            consumerSpecs.remove(consumer.queueName, spec)
+        }
+        val tag = consumer.consumerTag
+        val ch = consumer.channel
+        if (ch?.isOpen == true) {
+            runCatching { if (tag != null) ch.basicCancel(tag) }
+            runCatching { ch.close() }
+        }
         consumer.clearRuntime()
     }
 

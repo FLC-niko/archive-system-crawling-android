@@ -21,14 +21,16 @@ internal class CheckTargetAccount : Action {
         service: AutoOperationService,
         event: AccessibilityEvent
     ): String {
-        // 当前微信版本的 ContactInfoUI 对无障碍仅暴露空根节点。该页面只能由
-        // 本任务二维码识别后的 ChattingUI 右上角入口到达，因此类名本身就是
-        // 责任链已到达公众号资料页的可靠状态证据。
-        if (event.className?.toString()?.contains("ContactInfoUI", ignoreCase = true) == true ||
-            service.rootInActiveWindow?.className?.toString()
-                ?.contains("ContactInfoUI", ignoreCase = true) == true
-        ) {
-            logI(actionName, "已确认任务二维码进入公众号资料页: ${service.target}")
+        val isContactInfo = event.className?.toString()?.contains("ContactInfoUI", ignoreCase = true) == true ||
+            service.rootInActiveWindow?.className?.toString()?.contains("ContactInfoUI", ignoreCase = true) == true ||
+            service.currentWechatActivity?.contains("ContactInfoUI", ignoreCase = true) == true
+
+        val inWebView = event.className?.toString()?.contains("WebView", ignoreCase = true) == true ||
+            service.rootInActiveWindow?.className?.toString()?.contains("WebView", ignoreCase = true) == true ||
+            service.currentWechatActivity?.contains("WebView", ignoreCase = true) == true
+
+        if (isContactInfo || inWebView) {
+            logI(actionName, "已确认任务进入公众号主页: target=${service.target}, contactInfo=$isContactInfo, webView=$inWebView")
             service.resumeServiceDelay(event, 0L)
             return (service as WechatOperationService).firstlyTargetActionName
         }

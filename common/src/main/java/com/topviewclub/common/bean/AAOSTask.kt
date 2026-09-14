@@ -34,4 +34,5 @@ data class AAOSTask(
     val endDate: Long = Long.MIN_VALUE,
     val QR: String? = null,
     val rabbitTaskContext: RabbitTaskContext? = null,
+    val entryUrl: String? = null,
 )

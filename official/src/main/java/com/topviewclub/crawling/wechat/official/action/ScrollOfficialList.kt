@@ -81,7 +81,8 @@ class ScrollOfficialList : Action {
         }
 
         val root = service.rootInActiveWindow
-        if (root == null || root.childCount == 0) {
+        val recyclerView = root?.findNodeOrNull { className == CLS_RECYCLER_VIEW }
+        if (recyclerView == null) {
             if (!scrolling) {
                 // 无论积压了多少窗口事件，一次滑动后都必须先完成一次稳定 OCR。
                 // 这条约束保证日期标题不会未经检查就被连续两次手势推离屏幕。
@@ -126,9 +127,6 @@ class ScrollOfficialList : Action {
             }
             return actionName
         }
-        val recyclerView = root.findNodeOrNull {
-            className == CLS_RECYCLER_VIEW
-        } ?: return actionName
         recyclerView.scrollForward()
         Thread.sleep(200L)
         service.resumeServiceDelay(event, 0L)

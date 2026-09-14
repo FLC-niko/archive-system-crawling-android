@@ -118,4 +118,25 @@ class OfficialPageDetectorTest {
         )
         assertTrue("应识别到达底部的列表页", isList)
     }
+
+    @Test
+    fun testDetectionWithCurrentActivity() {
+        // 当 root 为空且 pageClass 仅为 FrameLayout 时，如果 currentActivity 为 ContactInfoUI，应判定为列表页
+        val isList = OfficialPageDetector.isOfficialListPage(
+            lines = emptyList(),
+            root = null,
+            pageClass = "android.widget.FrameLayout",
+            currentActivity = "com.tencent.mm.plugin.profile.ui.ContactInfoUI"
+        )
+        assertTrue("currentActivity 为 ContactInfoUI 时应判定为列表页", isList)
+
+        // 当 root 为空且 pageClass 为 FrameLayout 时，如果 currentActivity 为 TmplWebViewMMUI，应判定为文章页
+        val isArticle = OfficialPageDetector.isArticleDetailPage(
+            lines = emptyList(),
+            root = null,
+            pageClass = "android.widget.FrameLayout",
+            currentActivity = "com.tencent.mm.plugin.webview.ui.tools.fts.TmplWebViewMMUI"
+        )
+        assertTrue("currentActivity 为 TmplWebViewMMUI 时应判定为文章详情页", isArticle)
+    }
 }

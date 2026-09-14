@@ -24,6 +24,7 @@ object RabbitMQClient {
     )
 
     private val gzhConsumers = ConcurrentHashMap<String, RabbitMQClientManager.Consumer>()
+    private val gzhDeadLetterConsumers = ConcurrentHashMap<String, RabbitMQClientManager.Consumer>()
     private var supervisor: VhostConnectionSupervisor? = null
     private var started = false
 
@@ -110,27 +111,90 @@ object RabbitMQClient {
         )
     }
 
+    @Volatile
+    var isStandaloneMode: Boolean = true
+        private set
+
+    private var savedGzhCallback: (suspend (String, RabbitMQClientManager.DeliveryContext) -> Unit)? = null
+
     /**
-     * 注册 V2/legacy 公众号消费者到所有已配置 vhost。每个回调都收到自己的
-     * DeliveryContext，回调正常返回后 manager 才会 ACK。
+     * 动态切换消费模式：
+     * - 独立模式 (standalone = true)：直接从主队列消费当前任务，关闭死信队列消费者
+     * - 非独立/兜底模式 (standalone = false)：关闭主队列消费者，从死信/重试队列消费任务
      */
+    @Synchronized
+    fun setStandaloneMode(standalone: Boolean) {
+        if (isStandaloneMode == standalone && savedGzhCallback != null &&
+            ((standalone && gzhConsumers.isNotEmpty()) || (!standalone && gzhDeadLetterConsumers.isNotEmpty()))
+        ) {
+            return
+        }
+        isStandaloneMode = standalone
+        logRabbit("[模式切换] 当前模式设置为: ${if (standalone) "独立模式 (消费主任务队列)" else "兜底模式 (消费死信/重试队列)"}")
+        applyConsumerMode()
+    }
+
+    @Synchronized
+    private fun applyConsumerMode() {
+        val callback = savedGzhCallback ?: return
+        ensureStarted()
+
+        if (isStandaloneMode) {
+            // 独立模式：关闭死信队列消费者，开启主队列消费者
+            gzhDeadLetterConsumers.values.forEach { runCatching { it.close() } }
+            gzhDeadLetterConsumers.clear()
+
+            managers.forEach { (vhost, manager) ->
+                if (!gzhConsumers.containsKey(vhost)) {
+                    val topology = rabbitTopologyFor(vhost)
+                    val consumer = manager.registerConsumer(
+                        exchangeName = topology.exchange,
+                        exchangeType = topology.exchangeType,
+                        routingKey = topology.taskRoutingKey,
+                        queueName = topology.taskQueue,
+                        prefetch = 1,
+                        onMessageReceived = callback,
+                    )
+                    gzhConsumers[vhost] = consumer
+                    logRabbit("独立模式已注册主队列消费者: vhost=$vhost, queue=${topology.taskQueue}")
+                }
+            }
+            consumerGzhFromBackend = gzhConsumers[VIRTUAL_HOST]
+        } else {
+            // 非独立模式：关闭主队列消费者，开启死信/重试队列消费者
+            gzhConsumers.values.forEach { runCatching { it.close() } }
+            gzhConsumers.clear()
+            consumerGzhFromBackend = null
+
+            managers.forEach { (vhost, manager) ->
+                val dlqKey = "$vhost-dlq"
+                if (!gzhDeadLetterConsumers.containsKey(dlqKey)) {
+                    val topology = rabbitTopologyFor(vhost)
+                    val dlqConsumer = manager.registerConsumer(
+                        exchangeName = topology.exchange,
+                        exchangeType = topology.exchangeType,
+                        routingKey = topology.deadLetterRoutingKey,
+                        queueName = topology.deadLetterQueue,
+                        prefetch = 1,
+                        onMessageReceived = callback,
+                    )
+                    gzhDeadLetterConsumers[dlqKey] = dlqConsumer
+                    logRabbit("兜底模式已注册死信队列消费者: vhost=$vhost, queue=${topology.deadLetterQueue}")
+                }
+            }
+        }
+    }
+
+    /**
+     * 注册 V2/legacy 公众号消费者到所有已配置 vhost。根据当前 isStandaloneMode
+     * 决定激活主队列还是死信队列。
+     */
+    @Synchronized
     fun prepareGzhAutoConsumer(
         onMessageReceive: suspend (String, RabbitMQClientManager.DeliveryContext) -> Unit,
     ) {
-        ensureStarted()
-        managers.forEach { (vhost, manager) ->
-            val topology = rabbitTopologyFor(vhost)
-            val consumer = manager.registerConsumer(
-                exchangeName = topology.exchange,
-                exchangeType = topology.exchangeType,
-                routingKey = topology.taskRoutingKey,
-                queueName = topology.taskQueue,
-                prefetch = 1,
-                onMessageReceived = onMessageReceive,
-            )
-            gzhConsumers[vhost] = consumer
-        }
-        consumerGzhFromBackend = gzhConsumers[VIRTUAL_HOST]
+        savedGzhCallback = onMessageReceive
+        applyConsumerMode()
     }
 
     /** 旧版单参数回调兼容入口。 */
@@ -169,7 +233,9 @@ object RabbitMQClient {
         supervisor = null
         managers.values.forEach { it.close() }
         gzhConsumers.clear()
+        gzhDeadLetterConsumers.clear()
         consumerGzhFromBackend = null
+        savedGzhCallback = null
         started = false
     }
 }

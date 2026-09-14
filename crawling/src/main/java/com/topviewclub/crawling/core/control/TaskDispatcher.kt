@@ -6,6 +6,7 @@ import android.os.Looper
 import android.util.Base64.encodeToString
 import androidx.annotation.MainThread
 import androidx.annotation.RequiresApi
+import org.json.JSONObject
 import com.topviewclub.common.base.appContext
 import com.topviewclub.common.bean.*
 import com.topviewclub.common.bean.TaskCrawlingType.TYPE_OFFICIAL
@@ -187,10 +188,20 @@ object TaskDispatcher {
         body: String,
         delivery: RabbitMQClientManager.DeliveryContext,
     ) {
+        val root = runCatching { JSONObject(body) }.getOrNull()
+        if (root != null) {
+            val msgType = root.optString("messageType")
+            val payloadObj = root.optJSONObject("payload")
+            if (msgType == "RESULT" || (payloadObj != null && !payloadObj.has("account"))) {
+                logRabbit("忽略来自 ${delivery.queue} 的非 BTA 任务消息 (messageType=$msgType)")
+                return
+            }
+        }
         val message = RabbitTaskDecoder.decode(body.toByteArray(Charsets.UTF_8))
         val input = message.asV2()
+        val isFromDlq = delivery.queue.contains("dead") || delivery.queue.contains("dlq")
         logRabbit(
-            "收到公众号任务: vhost=${delivery.sourceVirtualHost}, " +
+            "收到公众号任务: vhost=${delivery.sourceVirtualHost}, queue=${delivery.queue}, isDlq=$isFromDlq, " +
                     "jobId=${input.business.jobId}, account=${input.payload.account.name}",
         )
         var ownsTask = false
@@ -205,7 +216,7 @@ object TaskDispatcher {
                     idempotencyKey = message.idempotencyKey,
                     eventId = message.eventId,
                     workflowId = message.workflowId,
-                    allowProcessingTakeover = delivery.isRedeliver,
+                    allowProcessingTakeover = delivery.isRedeliver || isFromDlq,
                 ),
             )
             if (!claim.claimed) {
@@ -290,6 +301,7 @@ object TaskDispatcher {
                             null
                         }
                         if (qrBody != null) {
+                            val entryUrl = (message as? RabbitTaskMessage.V2)?.task?.payload?.account?.entryUrl
                             withContext(Dispatchers.Main) {
                                 generateAndEnqueueTask(
                                     type = TYPE_OFFICIAL,
@@ -299,6 +311,7 @@ object TaskDispatcher {
                                     endDate = endDate,
                                     QRBody = qrBody,
                                     rabbitTaskContext = rabbitTaskContext,
+                                    entryUrl = entryUrl,
                                 )
                             }
                             rabbitTaskContext.completion.await()
@@ -379,6 +392,7 @@ object TaskDispatcher {
         endDate: Long,
         QRBody: String?,
         rabbitTaskContext: RabbitTaskContext? = null,
+        entryUrl: String? = null,
     ) {
 
 
@@ -407,6 +421,7 @@ object TaskDispatcher {
             endDate = endDate,
             QR = QRBody,
             rabbitTaskContext = rabbitTaskContext,
+            entryUrl = entryUrl,
         ).enqueue()
 
 
@@ -480,7 +495,7 @@ object TaskDispatcher {
                     this@TaskDispatcher.className,
                     "accessibility wake type=$type connected=$woke",
                 )
-            }, 10000L)
+            }, 1000L)
         }
     }
 

@@ -42,21 +42,26 @@ class HomingOfficialList : Action {
         // 还在滑动
         if (isScrolling) return actionName
         if (isCompleted) {
+            isCompleted = false
             service.resumeCurrentAction()
             return "CheckOfficialEndDate"
         }
         val root = service.rootInActiveWindow
         val contactInfoVisible = event.className?.toString()
-            ?.contains("ContactInfoUI", ignoreCase = true) == true
-        if (root == null || root.childCount == 0) {
-            if (!contactInfoVisible) {
+            ?.contains("ContactInfoUI", ignoreCase = true) == true ||
+            service.currentWechatActivity?.contains("ContactInfoUI", ignoreCase = true) == true
+        val isWebView = event.className?.toString()?.contains("WebView", ignoreCase = true) == true ||
+            service.currentWechatActivity?.contains("WebView", ignoreCase = true) == true
+        val recyclerView = root?.findNodeOrNull { className == CLS_RECYCLER_VIEW }
+        if (recyclerView == null) {
+            if (!contactInfoVisible && !isWebView) {
                 service.resumeServiceDelay(event, 300L)
                 return actionName
             }
-            // Xiaomi/微信 8.0.76 的 ContactInfoUI 是空节点树。资料头部约占
+            // Xiaomi/微信 8.0.76 的 ContactInfoUI 或 MMWebViewUI 是自绘/空节点树。资料头部约占
             // 屏幕上半部分，使用无障碍上滑将首批文章归位到可点击区域。
             isScrolling = true
-            service.scroll(
+            val dispatched = service.scroll(
                 540f,
                 1850f,
                 540f,
@@ -66,7 +71,7 @@ class HomingOfficialList : Action {
                 callback = gestureResultCallback,
             )
             service.resumeServiceDelay(event, 1100L)
-            logI(actionName, "公众号列表节点不可见，提交无障碍归位手势")
+            logI(actionName, "公众号列表节点不可见 (contactInfo=$contactInfoVisible, webView=$isWebView)，提交无障碍归位手势 accepted=$dispatched")
             return actionName
         }
         // 开始匹配并滑动

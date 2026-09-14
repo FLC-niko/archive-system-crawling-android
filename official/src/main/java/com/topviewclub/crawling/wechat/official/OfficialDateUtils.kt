@@ -27,7 +27,7 @@ private const val A_DAY_LONG = 24 * 60 * 60 * 1000L
 internal fun officialTimeFormat(s: String): Long {
     var str = s.trim()
     when (str) {
-        "今天" -> return todayLong
+        "置顶", "今天" -> return todayLong
         "昨天" -> return todayLong - A_DAY_LONG
         "周一" -> return todayLong - ((todayWeek + 6) % 7) * A_DAY_LONG
         "周二" -> return todayLong - ((todayWeek + 5) % 7) * A_DAY_LONG

@@ -58,6 +58,11 @@ object TaskResultType {
     const val NETWORK_EXCEPTION = "NET Error"
 
     /**
+     * 扫码高频风控限制（操作太过于频繁）
+     * */
+    const val FREQUENCY_LIMIT_EXCEPTION = "FLE Error"
+
+    /**
      * 预料之外的抓取类型
      * */
     const val UNEXPECTED_CRAWLING_TYPE = "UCT Error"

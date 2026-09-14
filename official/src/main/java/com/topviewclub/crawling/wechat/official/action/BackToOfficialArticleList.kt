@@ -60,6 +60,24 @@ class BackToOfficialArticleList : Action {
             return next
         }
 
+        val currentActivity = service.currentWechatActivity.orEmpty()
+        val pageClass = event.className?.toString().orEmpty()
+        val isContactInfo = currentActivity.contains("ContactInfoUI", ignoreCase = true) ||
+                currentActivity.contains("BizContactInfoUI", ignoreCase = true) ||
+                pageClass.contains("ContactInfoUI", ignoreCase = true) ||
+                pageClass.contains("BizContactInfoUI", ignoreCase = true)
+        val inWebView = currentActivity.contains("WebView", ignoreCase = true) ||
+                currentActivity.contains("TmplWebViewMMUI", ignoreCase = true) ||
+                pageClass.contains("WebView", ignoreCase = true) ||
+                pageClass.contains("TmplWebViewMMUI", ignoreCase = true)
+
+        if (isContactInfo && !inWebView) {
+            logI(actionName, "当前已处于公众号主页/列表页 ($currentActivity / $pageClass)，无需/终止返回，直接进入 CheckOfficialEndDate")
+            resetState()
+            service.resumeCurrentAction()
+            return "CheckOfficialEndDate"
+        }
+
         val now = SystemClock.uptimeMillis()
 
         // 1. 还未发出返回请求，仅执行单次返回动作
@@ -103,12 +121,13 @@ class BackToOfficialArticleList : Action {
         }
 
         // 4. 快速检查 UI 节点与类名
-        val pageClass = event.className?.toString().orEmpty()
         val root = service.rootInActiveWindow
 
         // 4.1 明确处于列表页
         val isContactInfoUI = pageClass.contains("ContactInfoUI", ignoreCase = true) ||
-                pageClass.contains("BizContactInfoUI", ignoreCase = true)
+                pageClass.contains("BizContactInfoUI", ignoreCase = true) ||
+                currentActivity.contains("ContactInfoUI", ignoreCase = true) ||
+                currentActivity.contains("BizContactInfoUI", ignoreCase = true)
         val isOfficialListUI = root != null && root.childCount > 0 &&
                 root.findNodeOrNull { className == "androidx.recyclerview.widget.RecyclerView" } != null
 
@@ -119,26 +138,15 @@ class BackToOfficialArticleList : Action {
             return "CheckOfficialEndDate"
         }
 
-        // 4.2 明确仍在 WebView
-        val stillWebView = pageClass.contains("WebView", ignoreCase = true) ||
-                pageClass.contains("TmplWebViewMMUI", ignoreCase = true) ||
-                pageClass.contains("MMWebView", ignoreCase = true)
-
-        if (stillWebView) {
-            logI(actionName, "页面仍在文章 WebView: $pageClass，继续等待稳定")
-            service.resumeServiceDelay(event, 200L)
-            return actionName
-        }
-
-        // 4.3 节点树为空或类名不明确（如 FrameLayout），执行 OCR 辅助精准判定
+        // 4.2 如果节点树为空或处于 WebView/自绘，使用 OCR 进行精准判定
         if (!captureInFlight) {
             captureInFlight = true
             OfficialScreenReader.recognize(
                 service = service,
                 onSuccess = { lines ->
                     captureInFlight = false
-                    val inArticle = OfficialPageDetector.isArticleDetailPage(lines, root, pageClass)
-                    val inList = OfficialPageDetector.isOfficialListPage(lines, root, pageClass)
+                    val inArticle = OfficialPageDetector.isArticleDetailPage(lines, root, pageClass, currentActivity)
+                    val inList = OfficialPageDetector.isOfficialListPage(lines, root, pageClass, currentActivity)
 
                     logI(actionName, "OCR 确认页面状态: inArticle=$inArticle, inList=$inList, lines=${lines.size}")
 
@@ -177,12 +185,16 @@ class BackToOfficialArticleList : Action {
     }
 
     private fun performBackAction(service: AutoOperationService) {
-        // 双重返回机制：首选左上角返回按钮坐标，次选全局返回，杜绝盲目多次连击
-        if (retryCount > 0) {
-            logI(actionName, "执行精准返回：模拟点击左上角返回按钮 (${BACK_BUTTON_X}, ${BACK_BUTTON_Y})")
-            service.tap(BACK_BUTTON_X, BACK_BUTTON_Y)
-        } else {
-            logI(actionName, "执行全局返回键 service.back()")
+        val rootPkg = service.rootInActiveWindow?.packageName?.toString()
+        if (rootPkg != null && rootPkg != "com.tencent.mm") {
+            logW(actionName, "当前前台包名为 $rootPkg，非微信，阻止发送返回键")
+            return
+        }
+        // 双重返回机制：首选左上角返回按钮坐标，次选全局返回，杜绝过度返回退到桌面
+        logI(actionName, "执行精准返回：模拟点击微信左上角返回按钮 (${BACK_BUTTON_X}, ${BACK_BUTTON_Y})")
+        val tapped = service.tap(BACK_BUTTON_X, BACK_BUTTON_Y)
+        if (!tapped) {
+            logI(actionName, "左上角手势未接受，执行服务返回键 service.back()")
             service.back()
         }
     }

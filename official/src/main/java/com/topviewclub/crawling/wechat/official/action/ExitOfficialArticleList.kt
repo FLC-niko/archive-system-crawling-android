@@ -16,7 +16,7 @@ internal class ExitOfficialArticleList : Action {
         // 返回上一级界面
         service.back()
         service.resumeServiceDelay(event, 250L)
-        return "ReturnToWechatLauncher"
+        return "EnterWechatLauncher"
     }
 
 }

@@ -40,6 +40,7 @@ dependencies {
     implementation(Dependencies.AndroidX.core)
     implementation(Dependencies.AndroidX.appCompat)
     implementation(Dependencies.View.material)
+    api("com.google.mlkit:text-recognition-chinese:16.0.1")
     testImplementation(Dependencies.Test.junit)
     androidTestImplementation(Dependencies.AndroidTest.junit)
     androidTestImplementation(Dependencies.AndroidTest.espresso)

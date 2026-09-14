@@ -1,5 +1,6 @@
 package com.topviewclub.crawling.core.control
 
+import android.content.ComponentName
 import android.provider.Settings
 import com.topviewclub.common.base.appContext
 import com.topviewclub.common.log.logE
@@ -39,7 +40,11 @@ internal abstract class Crawler {
             appContext.contentResolver,
             Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
         ).orEmpty().split(':').filter { it.isNotBlank() }
-        if (serviceClassName !in enabledServices) {
+        val targetComponent = ComponentName.unflattenFromString(serviceClassName)
+        val isEnabled = enabledServices.any { s ->
+            ComponentName.unflattenFromString(s) == targetComponent || s == serviceClassName
+        }
+        if (!isEnabled) {
             logE(
                 "Crawler",
                 "Accessibility service is not enabled: $serviceClassName",

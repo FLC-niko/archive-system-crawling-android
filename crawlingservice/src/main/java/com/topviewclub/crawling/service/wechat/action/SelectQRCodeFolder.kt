@@ -55,6 +55,10 @@ class SelectQRCodeFolder : Action {
                     target.parent?.parent?.click() == true ||
                     service.tapPickerNodeCenter(target)
             if (clicked) {
+                if (WechatVersionCompat.isLegacyRoute(service)) {
+                    Thread.sleep(1000L)
+                    return "SelectPhoto"
+                }
                 retryState.scheduleProbe(service, event)
                 return actionName
             }

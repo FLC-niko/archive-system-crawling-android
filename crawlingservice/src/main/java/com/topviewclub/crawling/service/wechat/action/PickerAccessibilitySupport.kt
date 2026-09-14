@@ -34,6 +34,26 @@ internal fun AccessibilityEvent.isScanUiEvent(): Boolean =
 internal fun AccessibilityEvent.isWechatScanContext(): Boolean =
     packageName?.toString() == WECHAT_PACKAGE_NAME && isScanUiEvent()
 
+internal fun AutoOperationService.isWechatScanWindowVisible(): Boolean {
+    val currentActivity = currentWechatActivity.orEmpty()
+    if (currentActivity.contains("BaseScanUI", ignoreCase = true) || currentActivity.contains("scanner.ui", ignoreCase = true)) return true
+
+    val wechatRoot = rootInActiveWindow?.takeIf { isWechatPackage(it.packageName) }
+    val currentClass = wechatRoot?.className?.toString().orEmpty()
+    if (currentClass.contains("BaseScanUI", ignoreCase = true) || currentClass.contains("scanner.ui", ignoreCase = true)) return true
+
+    for (window in windows) {
+        val root = window.root
+        if (root != null && isWechatPackage(root.packageName)) {
+            val rootClass = root.className?.toString().orEmpty()
+            if (rootClass.contains("BaseScanUI", ignoreCase = true) || rootClass.contains("scanner.ui", ignoreCase = true)) return true
+        }
+        val title = window.title?.toString().orEmpty()
+        if (title.contains("BaseScanUI", ignoreCase = true) || title.contains("scanner.ui", ignoreCase = true)) return true
+    }
+    return false
+}
+
 internal fun AccessibilityEvent.isGalleryUiEvent(): Boolean {
     val name = uiClassName()
     return name.contains("gallery", ignoreCase = true) ||
@@ -87,20 +107,30 @@ internal fun AutoOperationService.findPickerNodeOrNull(
  * 走这个快速判断，再决定是否需要进一步读取节点。
  */
 internal fun AutoOperationService.isWechatPhotoPickerContext(): Boolean {
-    // 不读取 windows.root：每个 root 都可能触发微信整棵图片无障碍树的 Binder
-    // 查询。当前活动窗口的根节点类名已足够识别页面。
-    val currentClass = rootInActiveWindow
-        ?.takeIf { isWechatPackage(it.packageName) }
-        ?.className
-        ?.toString()
-        .orEmpty()
-    return currentClass.let { name ->
-        name.contains("AlbumPreviewUI", ignoreCase = true) ||
-                name.contains("AlbumUI", ignoreCase = true) ||
-                name.contains("PhotoPicker", ignoreCase = true) ||
-                name.contains("PickerUI", ignoreCase = true)
+    if (isPickerClassName(currentWechatActivity.orEmpty())) return true
+
+    val wechatRoot = rootInActiveWindow?.takeIf { isWechatPackage(it.packageName) }
+    val currentClass = wechatRoot?.className?.toString().orEmpty()
+    if (isPickerClassName(currentClass)) return true
+
+    for (window in windows) {
+        val root = window.root
+        if (root != null && isWechatPackage(root.packageName)) {
+            val rootClass = root.className?.toString().orEmpty()
+            if (isPickerClassName(rootClass)) return true
+        }
+        val title = window.title?.toString().orEmpty()
+        if (isPickerClassName(title)) return true
     }
+    return false
 }
+
+private fun isPickerClassName(name: String): Boolean =
+    name.contains("AlbumPreviewUI", ignoreCase = true) ||
+            name.contains("AlbumUI", ignoreCase = true) ||
+            name.contains("PhotoPicker", ignoreCase = true) ||
+            name.contains("PickerUI", ignoreCase = true) ||
+            name.contains("GalleryEntryUI", ignoreCase = true)
 
 /**
  * 返回微信相册顶部当前目录标题。
@@ -139,6 +169,10 @@ internal fun AutoOperationService.isGalleryPickerVisible(event: AccessibilityEve
         return false
     }
 
+    if (isPickerClassName(currentWechatActivity.orEmpty())) return true
+    if (event.isGalleryUiEvent()) return true
+    if (isWechatPhotoPickerContext()) return true
+
     val currentRoot = rootInActiveWindow
     val currentPackage = currentRoot?.packageName?.toString()
     val wechatWindow = currentPackage == WECHAT_PACKAGE_NAME
@@ -146,27 +180,21 @@ internal fun AutoOperationService.isGalleryPickerVisible(event: AccessibilityEve
         return false
     }
 
-    if (event.isGalleryUiEvent()) return true
-
     val currentClassName = currentRoot?.className?.toString().orEmpty()
-    if (currentClassName.let { name ->
-            name.contains("AlbumUI", ignoreCase = true) ||
-                    name.contains("PhotoPicker", ignoreCase = true) ||
-                    name.contains("PickerUI", ignoreCase = true) ||
-                    name.contains("AlbumPreviewUI", ignoreCase = true)
-        }) return true
+    if (isPickerClassName(currentClassName)) return true
 
     // 延迟探针携带的 event 可能仍是 BaseScanUI 的旧事件，因此页面判定
     // 必须优先看当前微信窗口中的选择器节点，而不是只看 event 类名。
     // 仅在类名和事件都无法识别时才读取节点树；正常的 AlbumPreviewUI 会在
     // 上面的快速路径返回，不要让大图片树阻塞责任链。
-    return if (wechatWindow) {
-        currentRoot?.findNodeOrNull {
+    if (wechatWindow && currentRoot != null) {
+        return currentRoot.findNodeOrNull {
             text?.toString() in setOf("所有图片", "aaos", "QRCode") ||
                     contentDescription?.toString()?.startsWith("图片") == true ||
                     viewIdResourceName == "com.tencent.mm:id/f5"
         } != null
-    } else false
+    }
+    return false
 }
 
 internal fun AutoOperationService.isFolderListVisible(event: AccessibilityEvent): Boolean {
@@ -250,6 +278,7 @@ internal class PickerRetryState(
     private val probeDelayMs: Long = 350L,
 ) {
     private var attempts = 0
+    val currentAttempts: Int get() = attempts
     private var lastGestureAt = 0L
     private var probeScheduled = false
 
