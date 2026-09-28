@@ -5,7 +5,7 @@ object Build {
     const val targetSdk = 35
     // 每次旁装真机验证递增，避免部分 MIUI 包管理器对同 versionCode 的
     // streamed install 返回 Success 但仍保留旧 base.apk。
-    const val versionCode = 3
+    const val versionCode = 4
     const val versionName = "你猜"
 }
 

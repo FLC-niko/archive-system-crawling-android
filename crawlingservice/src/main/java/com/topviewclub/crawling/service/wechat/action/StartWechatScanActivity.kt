@@ -121,6 +121,9 @@ class StartWechatScanActivity : Action {
 
     private fun isScanWindow(service: AutoOperationService, event: AccessibilityEvent): Boolean {
         if (event.isScanUiEvent()) return true
+        // 服务端已通过 adb shell 把扫一扫拉到微信前台，此时不需要（也无法）由无障碍
+        // 服务再启动一次微信；直接接力 ClickAlbum，避免后台启动 Activity 被系统拦截。
+        if (service.isWechatScanWindowVisible()) return true
         val rootClass = service.rootInActiveWindow?.className?.toString().orEmpty()
         return rootClass.contains("BaseScanUI", ignoreCase = true) ||
                 rootClass.contains("scanner.ui", ignoreCase = true)

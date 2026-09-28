@@ -39,7 +39,7 @@ class SelectWeReadPhoto : Action {
         }
         if (photo != null && (photo.click() || photo.parent?.click() == true || photo.parent?.parent?.click() == true)) {
             logI(actionName, "通过原生相册节点选中二维码图片: ${photo.contentDescription}")
-            Thread.sleep(1500L)
+            service.resumeServiceDelay(event, 1500L)
             return "ConfirmWeReadLogin"
         }
 
@@ -47,7 +47,7 @@ class SelectWeReadPhoto : Action {
         logI(actionName, "通过自适应比率手势坐标点击相册第二格二维码")
         val tapped = service.tapPickerRatio(FIRST_PHOTO_X_RATIO, FIRST_PHOTO_Y_RATIO)
         if (tapped) {
-            Thread.sleep(1500L)
+            service.resumeServiceDelay(event, 1500L)
             return "ConfirmWeReadLogin"
         }
         return actionName

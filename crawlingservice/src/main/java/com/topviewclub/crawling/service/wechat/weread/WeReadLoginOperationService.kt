@@ -14,6 +14,7 @@ import com.topviewclub.crawling.service.wechat.weread.action.SelectWeReadPhoto
 
 /** 微信读书专用登录责任链，不执行公众号主页和目标账号动作。 */
 class WeReadLoginOperationService : WechatOperationService() {
+
     override val crawlServiceType: String = TaskCrawlingType.TYPE_WEREAD_LOGIN
     override val target: String = "weread"
     override val aaosTask: AAOSTask = AAOSTask(TaskCrawlingType.TYPE_WEREAD_LOGIN, serviceTag, target)

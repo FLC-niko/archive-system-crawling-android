@@ -4,6 +4,41 @@ Android Automatic Operation Service
 
 Designed by Kokomi 2022
 
+## Topview 当前部署与职责（2026-09-24）
+
+- 应用 ID：`com.topviewclub.crawling`；当前源码 `versionCode=3`。
+- 已验证设备：Xiaomi `22041216C`，Android 12 / API 31，USB 序列号 `C6P7HYDY9LYHAQON`。
+- 公众号任务由 AAOS 的 `OfficialOperationService` 通过无障碍完成；点击、滚动、复制链接和返回均不得用 ADB 代替。
+- 微信读书 Web 凭证恢复有两条路线：
+  - 经典路线：微信 `<8.0.40` 或 Android API `<=29`，服务端启动 Activity 并传入 `task_type=weread_login`，AAOS 使用 `WeReadLoginOperationService` 扫码、确认和退出；
+  - 现代路线：Android API `>=30` 且微信 `>=8.0.40`，`wechat-download-kt` 直接通过 ADB 比例坐标完成扫码、选图和授权。Android 11、12、13、14 都属于该系统分支。
+- `-2041` 是微信读书官方人机验证，AAOS/ADB 只能协助恢复页面和扫码，不能绕过人工验证。
+- `-2041` 的限时验证链接和二维码由 `wechat-download-kt` 生成并通过企业微信/飞书发送；浏览器完成验证码后由服务端恢复探测，AAOS 不接收这类系统通知。
+- ADB serial、安卓微信读书 App 身份与服务端 E-Ink `deviceId` 相互独立，AAOS 不读取或复用微信读书 App 私有 `deviceId`。
+
+长期连接不是手机无线 ADB，而是：
+
+```text
+手机 USB → Windows ADB Server :5037 → SSH 反向隧道
+→ 服务器 127.0.0.1:15037 → wechat-download-kt :8001
+```
+
+服务器端联调必须使用：
+
+```bash
+ADB_SERVER_SOCKET=tcp:127.0.0.1:15037 adb devices -l
+```
+
+### 构建
+
+```bash
+GRADLE_USER_HOME="$PWD/.gradle-user-home" \
+JAVA_HOME=/path/to/jdk17 \
+./gradlew :app:assembleDebug --no-daemon
+```
+
+产物为 `app/build/outputs/apk/debug/app-debug.apk`。若旧包与新包 debug 证书不同，`adb install -r` 会返回 `INSTALL_FAILED_UPDATE_INCOMPATIBLE`；必须先备份旧 APK 和应用数据，再在 MIUI 上确认清装。不要在未备份时直接卸载。
+
 
 
 ## AAOS 简单结构图
@@ -57,7 +92,8 @@ Designed by Kokomi 2022
 
 - Android SDK >= 24
 - 屏幕需要常亮不能熄灭
-- 手机上不要存留有任何一张照片
+- 手机保持解锁，USB 调试和 AAOS 无障碍服务持续授权
+- 微信读书二维码由服务端写入隔离目录并在任务结束后清理，不再要求清空手机全部照片
 
 
 
@@ -141,7 +177,7 @@ adb shell am force-stop com.topviewclub.crawling
 
 - 确保手机 Android SDK >= 24
 
-- 确保手机上没有存留有任何一张照片
+- 确保相册中没有遗留旧的 `weread_*` 二维码；无需清空其他个人照片
 
 - 将手机屏幕设为永不熄灭
 
@@ -161,7 +197,7 @@ adb shell am force-stop com.topviewclub.crawling
 
 ### 安装
 
-- 安装 AAOS v你猜
+- 安装当前构建的 AAOS v3（`versionCode=3`）
 - 安装微信 v8.0.18
 - 安装学习强国 v2.0.40
 - 安装 Shizuku v12.14
@@ -170,16 +206,8 @@ adb shell am force-stop com.topviewclub.crawling
 
 ### 微信配置
 
-- 登录好任一微信账号，现存的微信账号如下
-
-|     号      |  懂的都懂   | 手机号      |
-| :---------: | :---------: | ----------- |
-|   qqgzxys   |  xt2316677  |             |
-| 15913103435 |  1qaz1QAZ   | 15913103435 |
-| 19867619860 |  l12345678  | 19867619860 |
-| topviewlala | topview@624 | 18199978724 |
-
-- **强烈建议不要用自己的微信号进行测试，否则后果自负**
+- 使用专门的测试/采集微信账号，账号密码和手机号不得写入仓库文档。
+- **强烈建议不要用个人微信号进行自动化测试。**
 - 登陆完成后打开扫一扫，微信会索要相机权限，给它
 - 扫一扫界面点一下右下角的相册，微信会索要存储权限，给它
 
@@ -231,9 +259,14 @@ adb shell am force-stop com.topviewclub.crawling
     adb shell pm grant com.topviewclub.crawling android.permission.WRITE_SECURE_SETTINGS
     ```
 
-  - 这里是取得修改安全设置的系统最高权限，因为这个权限很特殊，因此只能通过 ADB 授权
+  - 该权限只能通过 ADB 授予；当前实现仍以系统设置中的真实无障碍授权为准，不会在后台强行开启服务
 
-  - 取得这个权限可以让 AAOS 自主操控无障碍服务的执行，而不需要人工介入
+- 在系统无障碍设置中确认以下两个服务已启用并处于 Bound 状态：
+
+  ```text
+  com.topviewclub.crawling/com.topviewclub.crawling.wechat.official.OfficialOperationService
+  com.topviewclub.crawling/com.topviewclub.crawling.service.wechat.weread.WeReadLoginOperationService
+  ```
 
 - 打开已经激活的 Shizuku
 
@@ -549,6 +582,7 @@ http://192.168.0.1/error?message=[$prefix] <result>&tag=<tag>
 | CheckQRCodeOperationService | 微信二维码图片检测服务 |
 |    VideoOperationService    |   微信视频号频道服务   |
 |  OfficialOperationService   |   微信公众号频道服务   |
+| WeReadLoginOperationService | 微信读书经典扫码登录服务 |
 |    XueXiOperationService    |  学习强国文章频道服务  |
 
 

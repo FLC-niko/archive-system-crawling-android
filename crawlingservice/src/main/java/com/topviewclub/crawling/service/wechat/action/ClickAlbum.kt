@@ -28,7 +28,9 @@ class ClickAlbum : Action {
 
     override val actionName: String = "ClickAlbum"
 
-    private val retryState = PickerRetryState(actionName)
+    // 相册按钮最多补点 4 次、每次间隔 2 秒：失败尽快结束本轮让服务端重试，
+    // 避免高频连点（既不稳定，也是自动化特征）。
+    private val retryState = PickerRetryState(actionName, maxAttempts = 4, retryIntervalMs = 2_000L)
     private var lastUiSignature: String? = null
     private var lastSourceSignature: String? = null
     private var scanPageConfirmed = false

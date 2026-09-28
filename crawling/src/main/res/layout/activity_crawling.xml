@@ -40,7 +40,6 @@
         android:layout_height="match_parent"
         android:clipToPadding="false"
         android:fillViewport="true"
-        android:paddingBottom="24dp">
         android:paddingBottom="36dp">
 
         <LinearLayout
@@ -48,19 +47,16 @@
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:paddingHorizontal="16dp"
-            android:paddingTop="12dp">
             android:paddingTop="10dp">
 
             <!-- Section 1: 运行技术统计 -->
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="8dp"
                 android:layout_marginBottom="6dp"
                 android:layout_marginStart="4dp"
                 android:text="运行统计"
                 android:textColor="@color/text_primary"
-                android:textSize="15sp"
                 android:textSize="14sp"
                 android:textStyle="bold" />
 
@@ -73,11 +69,9 @@
                 <com.google.android.material.card.MaterialCardView
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginEnd="6dp"
                     android:layout_marginEnd="5dp"
                     android:layout_weight="1"
                     app:cardBackgroundColor="@color/stat_success_container"
-                    app:cardCornerRadius="16dp"
                     app:cardCornerRadius="14dp"
                     app:cardElevation="0dp"
                     app:strokeColor="@color/stat_success_badge"
@@ -87,8 +81,6 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="vertical"
-                        android:paddingHorizontal="14dp"
-                        android:paddingVertical="12dp">
                         android:paddingHorizontal="12dp"
                         android:paddingVertical="9dp">
 
@@ -99,8 +91,6 @@
                             android:orientation="horizontal">
 
                             <ImageView
-                                android:layout_width="18dp"
-                                android:layout_height="18dp"
                                 android:layout_width="16dp"
                                 android:layout_height="16dp"
                                 android:src="@drawable/ic_check_circle"
@@ -110,11 +100,9 @@
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:layout_marginStart="6dp"
                                 android:layout_marginStart="5dp"
                                 android:text="已成功"
                                 android:textColor="@color/stat_success_text"
-                                android:textSize="13sp"
                                 android:textSize="12sp"
                                 android:textStyle="bold" />
 
@@ -124,12 +112,10 @@
                             android:id="@+id/tv_stat_success"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="4dp"
                             android:layout_marginTop="2dp"
                             android:gravity="end"
                             android:text="0"
                             android:textColor="@color/stat_success_text"
-                            android:textSize="26sp"
                             android:textSize="24sp"
                             android:textStyle="bold" />
 
@@ -141,11 +127,9 @@
                 <com.google.android.material.card.MaterialCardView
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="6dp"
                     android:layout_marginStart="5dp"
                     android:layout_weight="1"
                     app:cardBackgroundColor="@color/stat_completed_container"
-                    app:cardCornerRadius="16dp"
                     app:cardCornerRadius="14dp"
                     app:cardElevation="0dp"
                     app:strokeColor="@color/stat_completed_badge"
@@ -155,8 +139,6 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="vertical"
-                        android:paddingHorizontal="14dp"
-                        android:paddingVertical="12dp">
                         android:paddingHorizontal="12dp"
                         android:paddingVertical="9dp">
 
@@ -167,8 +149,6 @@
                             android:orientation="horizontal">
 
                             <ImageView
-                                android:layout_width="18dp"
-                                android:layout_height="18dp"
                                 android:layout_width="16dp"
                                 android:layout_height="16dp"
                                 android:src="@drawable/ic_task_alt"
@@ -178,11 +158,9 @@
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:layout_marginStart="6dp"
                                 android:layout_marginStart="5dp"
                                 android:text="已完成"
                                 android:textColor="@color/stat_completed_text"
-                                android:textSize="13sp"
                                 android:textSize="12sp"
                                 android:textStyle="bold" />
 
@@ -192,12 +170,10 @@
                             android:id="@+id/tv_stat_completed"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="4dp"
                             android:layout_marginTop="2dp"
                             android:gravity="end"
                             android:text="0"
                             android:textColor="@color/stat_completed_text"
-                            android:textSize="26sp"
                             android:textSize="24sp"
                             android:textStyle="bold" />
 
@@ -210,7 +186,6 @@
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
                 android:layout_marginTop="8dp"
                 android:orientation="horizontal">
 
@@ -218,11 +193,9 @@
                 <com.google.android.material.card.MaterialCardView
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginEnd="6dp"
                     android:layout_marginEnd="5dp"
                     android:layout_weight="1"
                     app:cardBackgroundColor="@color/stat_enqueuing_container"
-                    app:cardCornerRadius="16dp"
                     app:cardCornerRadius="14dp"
                     app:cardElevation="0dp"
                     app:strokeColor="@color/stat_enqueuing_badge"
@@ -232,8 +205,6 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="vertical"
-                        android:paddingHorizontal="14dp"
-                        android:paddingVertical="12dp">
                         android:paddingHorizontal="12dp"
                         android:paddingVertical="9dp">
 
@@ -244,8 +215,6 @@
                             android:orientation="horizontal">
 
                             <ImageView
-                                android:layout_width="18dp"
-                                android:layout_height="18dp"
                                 android:layout_width="16dp"
                                 android:layout_height="16dp"
                                 android:src="@drawable/ic_hourglass"
@@ -255,11 +224,9 @@
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:layout_marginStart="6dp"
                                 android:layout_marginStart="5dp"
                                 android:text="队列中"
                                 android:textColor="@color/stat_enqueuing_text"
-                                android:textSize="13sp"
                                 android:textSize="12sp"
                                 android:textStyle="bold" />
 
@@ -269,12 +236,10 @@
                             android:id="@+id/tv_stat_enqueuing"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="4dp"
                             android:layout_marginTop="2dp"
                             android:gravity="end"
                             android:text="0"
                             android:textColor="@color/stat_enqueuing_text"
-                            android:textSize="26sp"
                             android:textSize="24sp"
                             android:textStyle="bold" />
 
@@ -286,11 +251,9 @@
                 <com.google.android.material.card.MaterialCardView
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="6dp"
                     android:layout_marginStart="5dp"
                     android:layout_weight="1"
                     app:cardBackgroundColor="@color/stat_rate_container"
-                    app:cardCornerRadius="16dp"
                     app:cardCornerRadius="14dp"
                     app:cardElevation="0dp"
                     app:strokeColor="@color/stat_rate_badge"
@@ -300,8 +263,6 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="vertical"
-                        android:paddingHorizontal="14dp"
-                        android:paddingVertical="12dp">
                         android:paddingHorizontal="12dp"
                         android:paddingVertical="9dp">
 
@@ -312,8 +273,6 @@
                             android:orientation="horizontal">
 
                             <ImageView
-                                android:layout_width="18dp"
-                                android:layout_height="18dp"
                                 android:layout_width="16dp"
                                 android:layout_height="16dp"
                                 android:src="@drawable/ic_insights"
@@ -323,11 +282,9 @@
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:layout_marginStart="6dp"
                                 android:layout_marginStart="5dp"
                                 android:text="成功率"
                                 android:textColor="@color/stat_rate_text"
-                                android:textSize="13sp"
                                 android:textSize="12sp"
                                 android:textStyle="bold" />
 
@@ -337,12 +294,10 @@
                             android:id="@+id/tv_stat_rate"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="4dp"
                             android:layout_marginTop="2dp"
                             android:gravity="end"
                             android:text="0 %"
                             android:textColor="@color/stat_rate_text"
-                            android:textSize="26sp"
                             android:textSize="24sp"
                             android:textStyle="bold" />
 
@@ -356,14 +311,11 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="8dp"
                 android:layout_marginBottom="6dp"
                 android:layout_marginStart="4dp"
-                android:layout_marginTop="16dp"
                 android:layout_marginTop="12dp"
                 android:text="运行模式配置"
                 android:textColor="@color/text_primary"
-                android:textSize="15sp"
                 android:textSize="14sp"
                 android:textStyle="bold" />
 
@@ -371,7 +323,6 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 app:cardBackgroundColor="@color/card_surface"
-                app:cardCornerRadius="16dp"
                 app:cardCornerRadius="14dp"
                 app:cardElevation="0dp"
                 app:strokeColor="@color/card_stroke"
@@ -381,8 +332,6 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
-                    android:paddingHorizontal="16dp"
-                    android:paddingVertical="14dp">
                     android:paddingHorizontal="14dp"
                     android:paddingVertical="11dp">
 
@@ -393,8 +342,6 @@
                         android:orientation="horizontal">
 
                         <ImageView
-                            android:layout_width="22dp"
-                            android:layout_height="22dp"
                             android:layout_width="20dp"
                             android:layout_height="20dp"
                             android:src="@drawable/ic_tune"
@@ -404,12 +351,10 @@
                         <TextView
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:layout_marginStart="10dp"
                             android:layout_marginStart="8dp"
                             android:layout_weight="1"
                             android:text="独立运行模式"
                             android:textColor="@color/text_primary"
-                            android:textSize="16sp"
                             android:textSize="15sp"
                             android:textStyle="bold" />
 
@@ -425,13 +370,10 @@
                         android:id="@+id/tv_standalone_mode_desc"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:lineSpacingExtra="3dp"
                         android:layout_marginTop="4dp"
                         android:lineSpacingExtra="2dp"
                         android:text="开启：直接从 RabbitMQ 消费主任务队列\n(当前状态：独立模式)"
                         android:textColor="@color/text_secondary"
-                        android:textSize="13sp" />
                         android:textSize="12sp" />
 
                 </LinearLayout>
@@ -442,14 +384,11 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="8dp"
                 android:layout_marginBottom="6dp"
                 android:layout_marginStart="4dp"
-                android:layout_marginTop="16dp"
                 android:layout_marginTop="12dp"
                 android:text="权限与环境配置"
                 android:textColor="@color/text_primary"
-                android:textSize="15sp"
                 android:textSize="14sp"
                 android:textStyle="bold" />
 
@@ -457,7 +396,6 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 app:cardBackgroundColor="@color/card_surface"
-                app:cardCornerRadius="16dp"
                 app:cardCornerRadius="14dp"
                 app:cardElevation="0dp"
                 app:strokeColor="@color/card_stroke"
@@ -467,8 +405,6 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
-                    android:paddingHorizontal="14dp"
-                    android:paddingVertical="12dp">
                     android:paddingHorizontal="12dp"
                     android:paddingVertical="9dp">
 
@@ -477,16 +413,12 @@
                         style="@style/Widget.Material3.Button.TonalButton"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginBottom="6dp"
                         android:layout_marginBottom="4dp"
                         android:gravity="start|center_vertical"
-                        android:paddingVertical="12dp"
                         android:paddingVertical="10dp"
                         android:text="授权启动 VPN 代理服务"
                         android:textAllCaps="false"
                         android:textColor="@color/text_primary"
-                        android:textSize="14sp"
-                        app:cornerRadius="12dp"
                         android:textSize="13sp"
                         app:cornerRadius="10dp"
                         app:icon="@drawable/ic_vpn_key"
@@ -499,16 +431,12 @@
                         style="@style/Widget.Material3.Button.TonalButton"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginBottom="6dp"
                         android:layout_marginBottom="4dp"
                         android:gravity="start|center_vertical"
-                        android:paddingVertical="12dp"
                         android:paddingVertical="10dp"
                         android:text="授权管理微信缓存文件"
                         android:textAllCaps="false"
                         android:textColor="@color/text_primary"
-                        android:textSize="14sp"
-                        app:cornerRadius="12dp"
                         android:textSize="13sp"
                         app:cornerRadius="10dp"
                         app:icon="@drawable/ic_folder"
@@ -522,13 +450,10 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:gravity="start|center_vertical"
-                        android:paddingVertical="12dp"
                         android:paddingVertical="10dp"
                         android:text="Shizuku 服务授权（当前版本未启用）"
                         android:textAllCaps="false"
                         android:textColor="@color/text_secondary"
-                        android:textSize="14sp"
-                        app:cornerRadius="12dp"
                         android:textSize="13sp"
                         app:cornerRadius="10dp"
                         app:icon="@drawable/ic_terminal"
@@ -545,14 +470,11 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="8dp"
                 android:layout_marginBottom="6dp"
                 android:layout_marginStart="4dp"
-                android:layout_marginTop="16dp"
                 android:layout_marginTop="12dp"
                 android:text="AC 统计与数据查询"
                 android:textColor="@color/text_primary"
-                android:textSize="15sp"
                 android:textSize="14sp"
                 android:textStyle="bold" />
 
@@ -566,22 +488,17 @@
                     style="@style/Widget.Material3.Button.TonalButton"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginEnd="6dp"
                     android:layout_marginEnd="5dp"
                     android:layout_weight="1"
                     android:gravity="center"
-                    android:paddingVertical="14dp"
                     android:paddingVertical="12dp"
                     android:text="视频列表"
                     android:textAllCaps="false"
                     android:textColor="@color/text_primary"
-                    android:textSize="14sp"
-                    app:cornerRadius="14dp"
                     android:textSize="13sp"
                     app:cornerRadius="12dp"
                     app:icon="@drawable/ic_video_library"
                     app:iconGravity="textStart"
-                    app:iconPadding="8dp"
                     app:iconPadding="6dp"
                     app:iconTint="@color/md_theme_secondary" />
 
@@ -590,22 +507,17 @@
                     style="@style/Widget.Material3.Button.TonalButton"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="6dp"
                     android:layout_marginStart="5dp"
                     android:layout_weight="1"
                     android:gravity="center"
-                    android:paddingVertical="14dp"
                     android:paddingVertical="12dp"
                     android:text="用户列表"
                     android:textAllCaps="false"
                     android:textColor="@color/text_primary"
-                    android:textSize="14sp"
-                    app:cornerRadius="14dp"
                     android:textSize="13sp"
                     app:cornerRadius="12dp"
                     app:icon="@drawable/ic_people"
                     app:iconGravity="textStart"
-                    app:iconPadding="8dp"
                     app:iconPadding="6dp"
                     app:iconTint="@color/md_theme_tertiary" />
 
@@ -617,10 +529,8 @@
                 style="@style/Widget.Material3.Button.ElevatedButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="22dp"
                 android:layout_marginTop="16dp"
                 android:gravity="center"
-                android:paddingVertical="15dp"
                 android:paddingVertical="14dp"
                 android:text="启动 AAOS 服务"
                 android:textAllCaps="false"
@@ -629,7 +539,6 @@
                 android:textStyle="bold"
                 app:backgroundTint="@color/md_theme_primary"
                 app:cornerRadius="24dp"
-                app:elevation="4dp"
                 app:elevation="3dp"
                 app:icon="@drawable/ic_play_arrow"
                 app:iconGravity="textStart"

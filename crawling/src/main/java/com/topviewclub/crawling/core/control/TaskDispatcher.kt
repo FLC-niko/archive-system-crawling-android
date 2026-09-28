@@ -430,6 +430,20 @@ object TaskDispatcher {
 
     }
 
+    /**
+     * 服务端 ADB 已把微信读书二维码写入兼容目录；这里只启动经典 AAOS
+     * 无障碍责任链，不能再次删除相册或尝试从空 Base64 重写二维码。
+     */
+    @RequiresApi(Build.VERSION_CODES.O)
+    @MainThread
+    fun enqueueWeReadLoginTask() {
+        AAOSTask(
+            type = TaskCrawlingType.TYPE_WEREAD_LOGIN,
+            tag = "adb-weread-login",
+            target = "weread",
+        ).enqueue()
+    }
+
     @RequiresApi(Build.VERSION_CODES.O)
     @MainThread
     private fun AAOSTask.enqueue() {
@@ -487,8 +501,10 @@ object TaskDispatcher {
 //                wechatVideoCacheCaptor.removeAllVideosFromWechat()
 //                appContext.updateQRCode(tag)
                 // 任务进入队列前已完成二维码解析与校验，此处始终替换为本任务二维码。
-                appContext.deleteAllPhotos("aaos")
-                appContext.updateQR(tag, QR)
+                if (type != TaskCrawlingType.TYPE_WEREAD_LOGIN) {
+                    appContext.deleteAllPhotos("aaos")
+                    appContext.updateQR(tag, QR)
+                }
                 it.startCrawling(target, tag, startDate, endDate, rabbitTaskContext)
                 val woke = AutoOperationService.wakeServiceForTask(type)
                 logI(
@@ -506,6 +522,7 @@ object TaskDispatcher {
             TaskCrawlingType.TYPE_VIDEO -> WechatVideoCrawler
             TaskCrawlingType.TYPE_OFFICIAL -> WechatOfficialCrawler
             TaskCrawlingType.TYPE_CHECK_WECHAT_QRCODE -> WechatQRCodeCheckCrawler
+            TaskCrawlingType.TYPE_WEREAD_LOGIN -> WechatWeReadLoginCrawler
             TaskCrawlingType.TYPE_XUE_XI -> XueXiCrawler
             else -> {
 //                sendMessageToHostError(

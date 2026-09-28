@@ -3,6 +3,7 @@ package com.topviewclub.crawling.core.control
 import com.topviewclub.common.base.appContext
 import com.topviewclub.common.mq.RabbitTaskContext
 import com.topviewclub.crawling.service.wechat.check.CheckQRCodeOperationService
+import com.topviewclub.crawling.service.wechat.weread.WeReadLoginOperationService
 import com.topviewclub.crawling.wechat.auto.AutoChatOperationService
 import com.topviewclub.crawling.wechat.official.OfficialOperationService
 import com.topviewclub.crawling.wechat.video.VideoOperationService
@@ -125,4 +126,18 @@ internal object WechatQRCodeCheckCrawler : AbstractWechatCrawler() {
             account = target
         )
     }
+}
+
+/** 微信读书经典 AAOS 扫码登录链路。二维码已经由服务端 ADB 推入相册。 */
+internal object WechatWeReadLoginCrawler : AbstractWechatCrawler() {
+    override val serviceClassName =
+        "${appContext.packageName}/${WeReadLoginOperationService::class.java.name}"
+
+    override fun initData(
+        target: String?,
+        tag: String?,
+        startDate: Long,
+        endDate: Long,
+        rabbitTaskContext: RabbitTaskContext?,
+    ) = Unit
 }

@@ -62,9 +62,6 @@
         <service
             android:name="com.topviewclub.crawling.service.wechat.check.CheckQRCodeOperationService"
             tools:node="remove" />
-        <service
-            android:name="com.topviewclub.crawling.service.wechat.weread.WeReadLoginOperationService"
-            tools:node="remove" />
     </application>
 
 </manifest>

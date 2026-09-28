@@ -160,8 +160,28 @@ class CrawlingActivity : AppCompatActivity() {
             if (intent.getBooleanExtra("auto_start", false)) {
                 btnStartAaos.performClick()
             }
+
+            handleTaskTypeIntent(intent)
         }
 
+    }
+
+    /**
+     * CrawlingActivity 是 singleInstance，服务端反复 am start 只会把已有任务带到前台；
+     * 必须在 onNewIntent 中重新解析 task_type，否则只有首次启动能触发 AAOS 任务。
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleTaskTypeIntent(intent)
+    }
+
+    private fun handleTaskTypeIntent(intent: Intent?) {
+        if (intent?.getStringExtra("task_type") == "weread_login") {
+            TaskDispatcher.enqueueWeReadLoginTask()
+            toast("已启动微信读书扫码登录兼容任务")
+            moveTaskToBack(true)
+        }
     }
 
     private fun requestFileAccess() {
