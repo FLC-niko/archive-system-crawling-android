@@ -33,7 +33,7 @@ class CheckOfficialEndDate : Action {
     @Volatile
     private var emptyDateRetryCount = 0
 
-    fun reset() {
+    override fun reset() {
         captureInFlight = false
         pendingNextAction = null
         motionWakeScheduled = false

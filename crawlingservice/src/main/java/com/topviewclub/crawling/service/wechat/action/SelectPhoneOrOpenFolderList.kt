@@ -18,6 +18,10 @@ class SelectPhoneOrOpenFolderList : Action {
 
     private val retryState = PickerRetryState(actionName)
 
+    override fun reset() {
+        retryState.reset()
+    }
+
     override fun execute(
         service: AutoOperationService,
         event: AccessibilityEvent

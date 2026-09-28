@@ -331,6 +331,8 @@ abstract class AutoOperationService : AccessibilityService() {
 
         activeTask = task
         addActions()
+        // 复用动作实例前清空上一次任务遗留的失败计数与页面状态，避免连锁失败。
+        actionList.forEach { action -> runCatching { action.reset() } }
         eventHandler.onServiceCreate(this)
         taskInitialized = true
         startForegroundNotification()

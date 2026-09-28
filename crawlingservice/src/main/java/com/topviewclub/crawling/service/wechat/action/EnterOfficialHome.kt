@@ -49,6 +49,17 @@ internal class EnterOfficialHome : Action {
     @Volatile
     private var lastOcrAttemptTime = 0L
 
+    override fun reset() {
+        waitCount = 0
+        retryState.reset()
+        lastUiSignature = null
+        chattingContextSeen = false
+        pendingNextAction = null
+        ocrInFlight = false
+        lastArticleTapTime = 0L
+        lastOcrAttemptTime = 0L
+    }
+
     override fun execute(
         service: AutoOperationService,
         event: AccessibilityEvent

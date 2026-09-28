@@ -147,7 +147,7 @@ class StartWechatScanActivity : Action {
         }
     }
 
-    private fun reset() {
+    override fun reset() {
         probeScheduled = false
         launchAttempts = 0
         lastActionAt = 0L

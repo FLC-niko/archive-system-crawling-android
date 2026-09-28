@@ -36,6 +36,14 @@ class ClickAlbum : Action {
     private var scanPageConfirmed = false
     private var albumClickReadyAt = 0L
 
+    override fun reset() {
+        retryState.reset()
+        lastUiSignature = null
+        lastSourceSignature = null
+        scanPageConfirmed = false
+        albumClickReadyAt = 0L
+    }
+
     override fun execute(
         service: AutoOperationService,
         event: AccessibilityEvent

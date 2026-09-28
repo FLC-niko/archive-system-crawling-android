@@ -20,4 +20,11 @@ interface Action {
     @Throws(ActionException::class)
     fun execute(service: AutoOperationService, event: AccessibilityEvent): String
 
+    /**
+     * 任务开始时重置动作内部状态（失败计数、页面标记、OCR 状态等）。
+     *
+     * 无障碍服务实例与动作链会被多条任务复用；上一次任务失败留下的计数如果不清理，
+     * 下一次任务可能在第一个事件就判定"重试超限"而连锁失败。
+     */
+    fun reset() {}
 }

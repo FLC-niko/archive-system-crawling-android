@@ -208,7 +208,7 @@ class ConfirmWeReadLogin : Action {
         Thread.sleep(500L)
     }
 
-    private fun reset() {
+    override fun reset() {
         confirmTaps = 0
         lastConfirmAt = 0L
         driveStartedAt = 0L

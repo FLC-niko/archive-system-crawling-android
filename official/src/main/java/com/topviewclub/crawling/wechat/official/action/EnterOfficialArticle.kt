@@ -51,7 +51,7 @@ class EnterOfficialArticle : Action {
     @Volatile
     private var motionWakeScheduled = false
 
-    fun reset() {
+    override fun reset() {
         stepInternal = 0
         clickedArticles.clear()
         captureInFlight = false

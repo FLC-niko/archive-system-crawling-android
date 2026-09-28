@@ -27,6 +27,12 @@ internal class SelectPhoto : Action {
     private var photoSelected = false
     private var lastPhotoSelectedAt = 0L
 
+    override fun reset() {
+        retryState.reset()
+        photoSelected = false
+        lastPhotoSelectedAt = 0L
+    }
+
     override fun execute(
         service: AutoOperationService,
         event: AccessibilityEvent

@@ -78,7 +78,7 @@ internal class ReturnToWechatLauncher : Action {
     private fun closeTarget(target: AccessibilityNodeInfo): Boolean =
         target.click() || target.parent?.click() == true || target.parent?.parent?.click() == true
 
-    private fun reset() {
+    override fun reset() {
         scannerReached = false
         closeAttempts = 0
     }
