@@ -29,6 +29,9 @@ class StartWechatScanActivity : Action {
 
         private val scanLabels = setOf("扫一扫", "扫描")
         private val moreLabels = setOf("更多功能", "更多")
+        // 微信 8.0.76 起 shortcut 附加参数不再保证直达扫一扫（实测仅 shell 拉起生效），
+        // 无障碍服务自行拉起会停在 LauncherUI；此时按“发现 → 扫一扫”导航兜底。
+        private val discoverTabLabels = setOf("发现")
     }
 
     override val actionName: String = "StartWechatScanActivity"
@@ -76,10 +79,11 @@ class StartWechatScanActivity : Action {
             lastActionAt = SystemClock.uptimeMillis()
             if (started) {
                 logI(actionName, "已直接跳转微信 LauncherUI，等待扫一扫页面")
-                // 直接跳转成功后把下一步交给 ClickAlbum；延迟探针只复用
-                // 无障碍事件，不执行任何 adb 输入。
-                service.resumeServiceDelay(event, 1000L)
-                return "ClickAlbum"
+                // 拉起成功只代表微信在前台，不能假定扫一扫已打开（8.0.76 会把 shortcut
+                // 停在 LauncherUI）。继续在本动作内探测，等扫一扫窗口真正出现再交给
+                // ClickAlbum，避免在错误页面上盲点相册坐标。
+                scheduleProbe(service, event)
+                return actionName
             }
         }
         scheduleProbe(service, event)
@@ -96,6 +100,19 @@ class StartWechatScanActivity : Action {
         }
         if (scan != null && canAct()) {
             if (clickTarget(scan)) {
+                lastActionAt = SystemClock.uptimeMillis()
+                scheduleProbe(service, event)
+                return true
+            }
+        }
+
+        // 停在 LauncherUI（如“我”页）时先点底部“发现”标签，进入发现页后下一轮
+        // 探测即可命中“扫一扫”列表项。
+        val discover = root?.findNodeOrNull {
+            nodeLabel(this) in discoverTabLabels && !isEditable
+        }
+        if (discover != null && canAct()) {
+            if (clickTarget(discover)) {
                 lastActionAt = SystemClock.uptimeMillis()
                 scheduleProbe(service, event)
                 return true

@@ -24,6 +24,8 @@ class ClickAlbum : Action {
         private const val ALBUM_Y_RATIO = 0.853f
         private const val ALBUM_Y_FALLBACK_RATIO = 0.928f
         private const val SCAN_PAGE_SETTLE_MS = 1000L
+        // 探测间隔约 350ms，20 次≈7 秒仍未见扫一扫页即回退重进。
+        private const val SCAN_WAIT_MAX_PROBES = 20
     }
 
     override val actionName: String = "ClickAlbum"
@@ -35,6 +37,7 @@ class ClickAlbum : Action {
     private var lastSourceSignature: String? = null
     private var scanPageConfirmed = false
     private var albumClickReadyAt = 0L
+    private var scanWaitProbes = 0
 
     override fun reset() {
         retryState.reset()
@@ -42,6 +45,7 @@ class ClickAlbum : Action {
         lastSourceSignature = null
         scanPageConfirmed = false
         albumClickReadyAt = 0L
+        scanWaitProbes = 0
     }
 
     override fun execute(
@@ -108,6 +112,7 @@ class ClickAlbum : Action {
         ) {
             scanPageConfirmed = false
             albumClickReadyAt = 0L
+            scanWaitProbes = 0
             retryState.reset()
             logI(actionName, "已确认进入微信相册页")
             // AlbumPreviewUI 切换完成后可能不再发送新的无障碍事件，主动复用
@@ -123,12 +128,13 @@ class ClickAlbum : Action {
         val isWechatActive = currentRoot?.packageName?.toString() == WECHAT_PACKAGE_NAME ||
                 event.packageName?.toString() == WECHAT_PACKAGE_NAME ||
                 service.isWechatScanWindowVisible()
+        // 只认扫一扫页面的确凿证据。此前用 !isWechatPhotoPickerContext() 兜底会把
+        // LauncherUI（如“我”页）也当成扫一扫，导致在错误页面上盲点相册坐标。
         val scanPageVisible = isWechatActive && (
             event.isWechatScanContext() ||
             rootClassName.contains("BaseScanUI", ignoreCase = true) ||
             rootClassName.contains("scanner.ui", ignoreCase = true) ||
-            service.isWechatScanWindowVisible() ||
-            !service.isWechatPhotoPickerContext()
+            service.isWechatScanWindowVisible()
         )
 
         // 如果已经提交过相册点击手势，且当前已离开 BaseScanUI，直接进入选择器链路
@@ -143,10 +149,20 @@ class ClickAlbum : Action {
 
         if (!scanPageConfirmed) {
             if (!scanPageVisible) {
+                // 长时间等不到扫一扫页（例如被用户切走或入口停在 LauncherUI），
+                // 回到 StartWechatScanActivity 重新拉入口，而不是在这一页空转。
+                scanWaitProbes++
+                if (scanWaitProbes >= SCAN_WAIT_MAX_PROBES) {
+                    scanWaitProbes = 0
+                    retryState.reset()
+                    logI(actionName, "等待扫一扫页超时，回到 StartWechatScanActivity 重新进入")
+                    return "StartWechatScanActivity"
+                }
                 retryState.scheduleProbe(service, event)
                 return actionName
             }
 
+            scanWaitProbes = 0
             scanPageConfirmed = true
             retryState.reset()
             albumClickReadyAt = SystemClock.uptimeMillis() + SCAN_PAGE_SETTLE_MS

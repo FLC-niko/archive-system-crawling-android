@@ -82,6 +82,14 @@ object TaskDispatcher {
             return
         }
 
+        // 后台自启（广播/开机）不会打开 CrawlingActivity；必须在这里先应用已保存的
+        // 运行模式，否则会退回默认的独立模式，与服务器争抢主队列任务。
+        val standalonePrefs = appContext.getSharedPreferences(
+            "aaos_settings",
+            android.content.Context.MODE_PRIVATE,
+        )
+        RabbitMQClient.setStandaloneMode(standalonePrefs.getBoolean("standalone_mode", false))
+
         // 注册公众号，视频号，单个视频的生产者
         RabbitMQClient.prepareRabbitProducer()
         // V2/legacy 公众号消费者：回调挂起直到 Android 抓取完成且 ATD 已 confirm。

@@ -130,7 +130,9 @@ class CrawlingActivity : AppCompatActivity() {
             }
 
             val prefs = getSharedPreferences("aaos_settings", MODE_PRIVATE)
-            val initialStandalone = prefs.getBoolean("standalone_mode", true)
+            // 生产角色是“兜底模式”（服务器消费主队列，手机只处理死信）；
+            // 默认值必须与 TaskDispatcher.init 保持一致，避免后台自启时模式翻转。
+            val initialStandalone = prefs.getBoolean("standalone_mode", false)
             switchStandaloneMode.isChecked = initialStandalone
             RabbitMQClient.setStandaloneMode(initialStandalone)
             tvStandaloneModeDesc.text = if (initialStandalone) {

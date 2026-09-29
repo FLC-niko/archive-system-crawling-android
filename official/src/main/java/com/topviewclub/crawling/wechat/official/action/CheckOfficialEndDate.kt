@@ -15,6 +15,7 @@ class CheckOfficialEndDate : Action {
     companion object {
         private const val PUBLISH_DATE_ID = "com.tencent.mm:id/ac5"
         private const val THE_END_TEXT = OfficialPageDetector.THE_END_TEXT
+        private const val MAX_CONSECUTIVE_BACK_REQUESTS = 2
     }
 
     override val actionName: String = "CheckOfficialEndDate"
@@ -33,11 +34,16 @@ class CheckOfficialEndDate : Action {
     @Volatile
     private var emptyDateRetryCount = 0
 
+    // 防止 Check → BackTo → Check 乒乓：BackTo 刚确认过列表页后不得再次无进展地转回。
+    @Volatile
+    private var consecutiveBackRequests = 0
+
     override fun reset() {
         captureInFlight = false
         pendingNextAction = null
         motionWakeScheduled = false
         emptyDateRetryCount = 0
+        consecutiveBackRequests = 0
     }
 
     override fun execute(
@@ -68,7 +74,11 @@ class CheckOfficialEndDate : Action {
 
         service.resumeServiceDelay(event, 100L)
         val root = service.rootInActiveWindow
-        val pageClass = event.className?.toString().orEmpty()
+        // 优先使用当前 Activity：延迟探针携带的旧事件类名可能仍是文章 WebView，
+        // 会误导 isArticleDetailPage 判定“仍在文章页”，造成 Check/BackTo 死循环。
+        val pageClass = service.currentWechatActivity
+            ?.takeIf { it.isNotBlank() }
+            ?: event.className?.toString().orEmpty()
 
         val recyclerView = root?.findNodeOrNull { className == CLS_RECYCLER_VIEW }
         if (recyclerView == null) {
@@ -83,12 +93,14 @@ class CheckOfficialEndDate : Action {
         if (end != null) {
             try {
                 emptyDateRetryCount = 0
+                consecutiveBackRequests = 0
                 return AutoOperationService.ActionType.ActionSuccess
             } finally {
                 service.resumeServiceDelay(event, 0L)
             }
         }
         try {
+            consecutiveBackRequests = 0
             return if (isAfterPublishDate(service.endDate, root)) {
                 emptyDateRetryCount = 0
                 "EnterOfficialArticle"
@@ -117,11 +129,25 @@ class CheckOfficialEndDate : Action {
                 logI(actionName, "OCR 页面: $snapshot")
 
                 // 1. 深度检测是否仍在文章详情页（包括正文元数据与底部操作栏）
-                val stillInArticle = OfficialPageDetector.isArticleDetailPage(lines, root, pageClass)
+                val stillInArticle = OfficialPageDetector.isArticleDetailPage(
+                    lines,
+                    root,
+                    pageClass,
+                    currentActivity = service.currentWechatActivity,
+                )
                 if (stillInArticle) {
-                    logW(actionName, "OCR 检测到文章特有元素，页面仍在文章中，转回返回动作")
                     emptyDateRetryCount = 0
-                    pendingNextAction = "BackToOfficialArticleList"
+                    if (consecutiveBackRequests >= MAX_CONSECUTIVE_BACK_REQUESTS) {
+                        // 返回动作刚确认过列表页却又被判成文章页：若无脑继续返回会
+                        // 在 Check/BackTo 之间死循环，这里强制按列表滚动恢复推进。
+                        consecutiveBackRequests = 0
+                        logW(actionName, "连续返回请求无进展，按列表页强制滚动恢复")
+                        pendingNextAction = "ScrollOfficialList"
+                    } else {
+                        consecutiveBackRequests++
+                        logW(actionName, "OCR 检测到文章特有元素，页面仍在文章中，转回返回动作")
+                        pendingNextAction = "BackToOfficialArticleList"
+                    }
                     captureInFlight = false
                     service.resumeCurrentAction()
                     return@recognize
@@ -148,6 +174,7 @@ class CheckOfficialEndDate : Action {
 
                 if (visibleDates.isNotEmpty()) {
                     emptyDateRetryCount = 0
+                    consecutiveBackRequests = 0
                     val oldestVisibleDate = visibleDates.maxByOrNull { it.first }?.second
                     pendingNextAction = if (service.endDate >= System.currentTimeMillis()) {
                         "EnterOfficialArticle"
@@ -166,6 +193,7 @@ class CheckOfficialEndDate : Action {
                     )
                     if (isListPage) {
                         emptyDateRetryCount = 0
+                        consecutiveBackRequests = 0
                         pendingNextAction = if (service.endDate >= System.currentTimeMillis()) {
                             "EnterOfficialArticle"
                         } else {
