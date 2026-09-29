@@ -1,6 +1,7 @@
 package com.topviewclub.crawling.wechat.official
 
 import android.view.accessibility.AccessibilityNodeInfo
+import com.topviewclub.crawling.service.AutoOperationService
 import com.topviewclub.crawling.service.CLS_RECYCLER_VIEW
 import com.topviewclub.crawling.service.findNodeOrNull
 import com.topviewclub.crawling.wechat.official.action.RecognizedScreenLine
@@ -8,6 +9,26 @@ import com.topviewclub.crawling.wechat.official.action.RecognizedScreenLine
 internal object OfficialPageDetector {
 
     const val THE_END_TEXT = "已无更多订阅消息"
+
+    /**
+     * 跨窗口查找微信文章列表的 RecyclerView。
+     *
+     * 小米/微信 8.0.76 的部分公众号页面上 rootInActiveWindow 只是空壳，
+     * 真正可滚动的列表节点挂在其它 AccessibilityWindow 上；只查活动窗口
+     * 会误判“列表节点不可见”，退化成不一定生效的坐标手势。
+     */
+    fun findWechatRecyclerView(service: AutoOperationService): AccessibilityNodeInfo? {
+        val active = service.rootInActiveWindow
+        if (active?.packageName?.toString() == "com.tencent.mm") {
+            active.findNodeOrNull { className == CLS_RECYCLER_VIEW }?.let { return it }
+        }
+        service.windows.forEach { window ->
+            val root = window.root ?: return@forEach
+            if (root.packageName?.toString() != "com.tencent.mm") return@forEach
+            root.findNodeOrNull { className == CLS_RECYCLER_VIEW }?.let { return it }
+        }
+        return null
+    }
 
     // 文章顶部元数据与内容特征词
     private val ARTICLE_CONTENT_MARKERS = listOf(

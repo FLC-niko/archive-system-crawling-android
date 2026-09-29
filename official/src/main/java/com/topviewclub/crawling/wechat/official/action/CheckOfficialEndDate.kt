@@ -16,6 +16,8 @@ class CheckOfficialEndDate : Action {
         private const val PUBLISH_DATE_ID = "com.tencent.mm:id/ac5"
         private const val THE_END_TEXT = OfficialPageDetector.THE_END_TEXT
         private const val MAX_CONSECUTIVE_BACK_REQUESTS = 2
+        private const val UNKNOWN_PAGE_SCROLL_LIMIT = 3
+        private const val MAX_OCR_FAILURES_BEFORE_SCROLL = 3
     }
 
     override val actionName: String = "CheckOfficialEndDate"
@@ -38,12 +40,16 @@ class CheckOfficialEndDate : Action {
     @Volatile
     private var consecutiveBackRequests = 0
 
+    @Volatile
+    private var ocrFailureCount = 0
+
     override fun reset() {
         captureInFlight = false
         pendingNextAction = null
         motionWakeScheduled = false
         emptyDateRetryCount = 0
         consecutiveBackRequests = 0
+        ocrFailureCount = 0
     }
 
     override fun execute(
@@ -72,21 +78,33 @@ class CheckOfficialEndDate : Action {
             return next
         }
 
+        // 任务被用户切页/系统弹窗打断后可能停在微信主页或“发现/通讯录/我”页。
+        // 此时继续在错误页面上滚动/返回只会空转，直接从扫码入口重新进入目标公众号。
+        val currentActivity = service.currentWechatActivity.orEmpty()
+        if (currentActivity.contains("LauncherUI", ignoreCase = true)) {
+            emptyDateRetryCount = 0
+            consecutiveBackRequests = 0
+            ocrFailureCount = 0
+            logW(actionName, "检测到微信主页/发现页，任务中断，回到扫码入口重新进入目标公众号")
+            service.resumeServiceDelay(event, 200L)
+            return "StartWechatScanActivity"
+        }
+
         service.resumeServiceDelay(event, 100L)
         val root = service.rootInActiveWindow
         // 优先使用当前 Activity：延迟探针携带的旧事件类名可能仍是文章 WebView，
         // 会误导 isArticleDetailPage 判定“仍在文章页”，造成 Check/BackTo 死循环。
-        val pageClass = service.currentWechatActivity
-            ?.takeIf { it.isNotBlank() }
+        val pageClass = currentActivity
+            .takeIf { it.isNotBlank() }
             ?: event.className?.toString().orEmpty()
 
-        val recyclerView = root?.findNodeOrNull { className == CLS_RECYCLER_VIEW }
+        val recyclerView = OfficialPageDetector.findWechatRecyclerView(service)
         if (recyclerView == null) {
-            recognizeEmptyAccessibilityPage(service, root, pageClass)
+            recognizeEmptyAccessibilityPage(service, event, root, pageClass)
             return actionName
         }
         OfficialListMotionGate.markInspected()
-        val end = root.findNodeOrNull {
+        val end = recyclerView.findNodeOrNull {
             text?.toString() == THE_END_TEXT
         }
         // 已经到达推文页末尾
@@ -101,7 +119,7 @@ class CheckOfficialEndDate : Action {
         }
         try {
             consecutiveBackRequests = 0
-            return if (isAfterPublishDate(service.endDate, root)) {
+            return if (isAfterPublishDate(service.endDate, recyclerView)) {
                 emptyDateRetryCount = 0
                 "EnterOfficialArticle"
             } else {
@@ -114,6 +132,7 @@ class CheckOfficialEndDate : Action {
 
     private fun recognizeEmptyAccessibilityPage(
         service: AutoOperationService,
+        event: AccessibilityEvent,
         root: AccessibilityNodeInfo?,
         pageClass: String,
     ) {
@@ -123,6 +142,7 @@ class CheckOfficialEndDate : Action {
             service = service,
             onSuccess = { lines ->
                 OfficialListMotionGate.markInspected()
+                ocrFailureCount = 0
                 val snapshot = lines.joinToString(" | ") {
                     "${it.text}@${it.bounds.top}"
                 }
@@ -200,15 +220,23 @@ class CheckOfficialEndDate : Action {
                             "ScrollOfficialList"
                         }
                     } else {
-                        // 既非明确列表也无日期：防误滑保护，重试或转回返回动作
+                        // 既非明确列表也无日期：绝不空按返回（会把页面带离目标账号甚至
+                        // 退回微信主页）。先小步滚动观察；多次无进展再回扫码入口重进。
                         emptyDateRetryCount++
-                        logW(actionName, "未检测到列表特征或日期 (尝试 $emptyDateRetryCount)，执行防御")
-                        pendingNextAction = if (emptyDateRetryCount <= 2) {
-                            "BackToOfficialArticleList"
+                        val onTargetAccount = service.currentWechatActivity?.let {
+                            it.contains("ContactInfoUI", ignoreCase = true) ||
+                                it.contains("BizContactInfoUI", ignoreCase = true)
+                        } == true
+                        pendingNextAction = if (onTargetAccount || emptyDateRetryCount <= UNKNOWN_PAGE_SCROLL_LIMIT) {
+                            "ScrollOfficialList"
                         } else {
                             emptyDateRetryCount = 0
-                            "ScrollOfficialList"
+                            "StartWechatScanActivity"
                         }
+                        logW(
+                            actionName,
+                            "未检测到列表特征或日期 (尝试 $emptyDateRetryCount, 目标号页=$onTargetAccount)，下一步: $pendingNextAction",
+                        )
                     }
                 }
 
@@ -218,7 +246,16 @@ class CheckOfficialEndDate : Action {
             onFailure = {
                 OfficialListMotionGate.markInspected()
                 captureInFlight = false
-                pendingNextAction = "BackToOfficialArticleList"
+                ocrFailureCount++
+                if (ocrFailureCount >= MAX_OCR_FAILURES_BEFORE_SCROLL) {
+                    // 截图被节流（errorCode=3）时反复请求只会持续失败；改为滚动观察，
+                    // 不再按返回键，避免把页面带回微信主页。
+                    ocrFailureCount = 0
+                    pendingNextAction = "ScrollOfficialList"
+                    logW(actionName, "无障碍截图连续失败，转为滚动观察")
+                } else {
+                    service.resumeServiceDelay(event, 400L)
+                }
                 service.resumeCurrentAction()
             },
         )

@@ -6,6 +6,7 @@ import android.view.accessibility.AccessibilityEvent
 import com.topviewclub.common.log.logI
 import com.topviewclub.crawling.service.*
 import com.topviewclub.crawling.service.action.Action
+import com.topviewclub.crawling.wechat.official.OfficialPageDetector
 import android.os.Handler
 import android.os.SystemClock
 
@@ -80,8 +81,7 @@ class ScrollOfficialList : Action {
             return "CheckOfficialEndDate"
         }
 
-        val root = service.rootInActiveWindow
-        val recyclerView = root?.findNodeOrNull { className == CLS_RECYCLER_VIEW }
+        val recyclerView = OfficialPageDetector.findWechatRecyclerView(service)
         if (recyclerView == null) {
             if (!scrolling) {
                 // 无论积压了多少窗口事件，一次滑动后都必须先完成一次稳定 OCR。
@@ -127,7 +127,9 @@ class ScrollOfficialList : Action {
             }
             return actionName
         }
-        recyclerView.scrollForward()
+        OfficialListMotionGate.markMovingFor(400L)
+        val scrolled = recyclerView.scrollForward()
+        logI(actionName, "列表节点可见，提交 scrollForward accepted=$scrolled (跨窗口查找)")
         Thread.sleep(200L)
         service.resumeServiceDelay(event, 0L)
         return "CheckOfficialEndDate"

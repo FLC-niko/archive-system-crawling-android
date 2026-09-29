@@ -60,6 +60,15 @@ class BackToOfficialArticleList : Action {
             return next
         }
 
+        // 任务被切页打断后停在微信主页/发现页时，返回键毫无意义且会持续空转，
+        // 直接从扫码入口重新进入目标公众号。
+        if (service.currentWechatActivity.orEmpty().contains("LauncherUI", ignoreCase = true)) {
+            logI(actionName, "检测到微信主页/发现页，放弃返回，回到扫码入口重新进入目标公众号")
+            resetState()
+            service.resumeServiceDelay(event, 200L)
+            return "StartWechatScanActivity"
+        }
+
         val currentActivity = service.currentWechatActivity.orEmpty()
         val pageClass = event.className?.toString().orEmpty()
         val isContactInfo = currentActivity.contains("ContactInfoUI", ignoreCase = true) ||
@@ -128,8 +137,7 @@ class BackToOfficialArticleList : Action {
                 pageClass.contains("BizContactInfoUI", ignoreCase = true) ||
                 currentActivity.contains("ContactInfoUI", ignoreCase = true) ||
                 currentActivity.contains("BizContactInfoUI", ignoreCase = true)
-        val isOfficialListUI = root != null && root.childCount > 0 &&
-                root.findNodeOrNull { className == "androidx.recyclerview.widget.RecyclerView" } != null
+        val isOfficialListUI = OfficialPageDetector.findWechatRecyclerView(service) != null
 
         if (isContactInfoUI || isOfficialListUI) {
             logI(actionName, "已通过类名/节点确认回到列表页: ContactInfoUI=$isContactInfoUI, ListUI=$isOfficialListUI")
