@@ -184,7 +184,8 @@ internal class EnterOfficialHome : Action {
         }
 
         val chattingVisible = event.uiClassName().contains("ChattingUI", ignoreCase = true) ||
-                currentClassName.contains("ChattingUI", ignoreCase = true)
+                currentClassName.contains("ChattingUI", ignoreCase = true) ||
+                currentWechatActivity.contains("ChattingUI", ignoreCase = true)
         if (chattingVisible) chattingContextSeen = true
         if (chattingVisible || chattingContextSeen) {
             val chatInfo = root?.findNodeOrNull {

@@ -70,9 +70,10 @@ class OfficialOperationService : WechatOperationService() {
 
     override val serviceTag: String? get() = session?.serviceTag
 
-    override val firstlyTargetActionName: String = "HomingOfficialList"
+    override val firstlyTargetActionName: String = "SelectOfficialArticleTab"
 
     override val wechatChain = listOf(
+        SelectOfficialArticleTab(),
         HomingOfficialList(),
         CheckOfficialEndDate(),
         ScrollOfficialList(),

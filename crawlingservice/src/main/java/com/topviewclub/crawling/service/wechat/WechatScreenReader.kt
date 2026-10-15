@@ -15,7 +15,10 @@ import com.topviewclub.crawling.service.AutoOperationService
 data class RecognizedScreenLine(
     val text: String,
     val bounds: Rect,
+    val symbols: List<RecognizedTextSymbol> = emptyList(),
 )
+
+data class RecognizedTextSymbol(val text: String, val bounds: Rect)
 
 object WechatScreenReader {
 
@@ -64,7 +67,10 @@ object WechatScreenReader {
                                     .flatMap { it.lines }
                                     .mapNotNull { line ->
                                         val bounds = line.boundingBox ?: return@mapNotNull null
-                                        RecognizedScreenLine(line.text.trim(), Rect(bounds))
+                                        val symbols = line.elements.flatMap { it.symbols }.mapNotNull { symbol ->
+                                            symbol.boundingBox?.let { RecognizedTextSymbol(symbol.text, Rect(it)) }
+                                        }
+                                        RecognizedScreenLine(line.text.trim(), Rect(bounds), symbols)
                                     }
                                     .filter { it.text.isNotBlank() }
                                     .sortedWith(compareBy({ it.bounds.top }, { it.bounds.left }))

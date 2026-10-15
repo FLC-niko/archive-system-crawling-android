@@ -3,6 +3,8 @@ package com.topviewclub.crawling.core.control
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.content.ComponentName
+import android.provider.Settings
 import android.util.Base64.encodeToString
 import androidx.annotation.MainThread
 import androidx.annotation.RequiresApi
@@ -79,6 +81,19 @@ object TaskDispatcher {
     fun init() {
         if (initialized) {
             logI("AAOS Initializer", "AAOS already initialized")
+            return
+        }
+
+        val enabledAccessibility = Settings.Secure.getString(
+            appContext.contentResolver,
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+        ).orEmpty().split(':').mapNotNull(ComponentName::unflattenFromString)
+        val officialService = ComponentName(
+            appContext.packageName,
+            "com.topviewclub.crawling.wechat.official.OfficialOperationService",
+        )
+        if (officialService !in enabledAccessibility) {
+            logI("AAOS Initializer", "公众号无障碍未授权，暂不连接任务消费者，请在权限区域开启")
             return
         }
 

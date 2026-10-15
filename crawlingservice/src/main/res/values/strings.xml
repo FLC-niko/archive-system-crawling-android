@@ -1,4 +1,5 @@
 <resources>
     <string name="app_name">Crawling</string>
     <string name="check_qrcode_operation_service">检查 { 微信二维码是否有效 } 的无障碍服务</string>
+    <string name="weread_login_operation_service">通过微信扫码确认微信读书 Web 登录，恢复服务端账号。</string>
 </resources>

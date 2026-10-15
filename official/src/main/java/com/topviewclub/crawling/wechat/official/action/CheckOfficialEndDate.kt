@@ -4,6 +4,8 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.topviewclub.crawling.service.*
 import com.topviewclub.crawling.service.action.Action
+import com.topviewclub.crawling.service.action.ActionException
+import com.topviewclub.crawling.wechat.official.OfficialListProgressGuard
 import com.topviewclub.crawling.wechat.official.officialTimeFormat
 import com.topviewclub.crawling.wechat.official.OfficialPageDetector
 import com.topviewclub.common.log.logI
@@ -43,6 +45,9 @@ class CheckOfficialEndDate : Action {
     @Volatile
     private var ocrFailureCount = 0
 
+    private val progressGuard = OfficialListProgressGuard()
+    private var pendingFailure: String? = null
+
     override fun reset() {
         captureInFlight = false
         pendingNextAction = null
@@ -50,6 +55,8 @@ class CheckOfficialEndDate : Action {
         emptyDateRetryCount = 0
         consecutiveBackRequests = 0
         ocrFailureCount = 0
+        progressGuard.reset()
+        pendingFailure = null
     }
 
     override fun execute(
@@ -60,6 +67,7 @@ class CheckOfficialEndDate : Action {
             lastServiceTag = service.serviceTag
             reset()
         }
+        pendingFailure?.let { throw ActionException(it) }
         val motionRemaining = OfficialListMotionGate.remainingMs()
         if (motionRemaining > 0L) {
             if (!motionWakeScheduled) {
@@ -81,6 +89,11 @@ class CheckOfficialEndDate : Action {
         // 任务被用户切页/系统弹窗打断后可能停在微信主页或“发现/通讯录/我”页。
         // 此时继续在错误页面上滚动/返回只会空转，直接从扫码入口重新进入目标公众号。
         val currentActivity = service.currentWechatActivity.orEmpty()
+        if (currentActivity.contains("ChattingUI", ignoreCase = true)) {
+            logW(actionName, "当前是公众号聊天窗口，先进入公众号资料与历史列表，停止在聊天记录中反复滚动")
+            service.resumeServiceDelay(event, 200L)
+            return "EnterOfficialHome"
+        }
         if (currentActivity.contains("LauncherUI", ignoreCase = true)) {
             emptyDateRetryCount = 0
             consecutiveBackRequests = 0
@@ -183,7 +196,30 @@ class CheckOfficialEndDate : Action {
                     return@recognize
                 }
 
-                // 3. 提取可见日期
+                // 手势完成不等于列表实际移动。只比较滚动后的稳定正文，排除状态栏、
+                // 页签和底部导航；重复事件不能增加次数，更不能把卡住当作采集完成。
+                val height = service.resources.displayMetrics.heightPixels
+                val fingerprint = lines.filter {
+                    it.bounds.top > height * 0.22f && it.bounds.bottom < height * 0.96f
+                }.joinToString("|") { "${it.text.replace(Regex("\\s+"), "")}@${it.bounds.top / 40}" }
+                when (progressGuard.observe(fingerprint, OfficialListMotionGate.generation())) {
+                    OfficialListProgressGuard.Decision.REENTER -> {
+                        logW(actionName, "连续滚动后正文没有变化，重新扫码进入文章页签一次")
+                        pendingNextAction = "StartWechatScanActivity"
+                        captureInFlight = false
+                        service.resumeCurrentAction()
+                        return@recognize
+                    }
+                    OfficialListProgressGuard.Decision.FAIL -> {
+                        pendingFailure = "OFFICIAL_LIST_NO_PROGRESS"
+                        captureInFlight = false
+                        service.resumeCurrentAction()
+                        return@recognize
+                    }
+                    OfficialListProgressGuard.Decision.CONTINUE -> Unit
+                }
+
+                // 3. 提取独立的发布日期标签，不能把标题里的“今天”当成日期。
                 val visibleDates = lines.asSequence()
                     .mapNotNull { line ->
                         OfficialPageDetector.extractDateOrNull(line.text)?.let { date ->

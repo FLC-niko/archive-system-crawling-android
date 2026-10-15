@@ -1,1 +1,6 @@
-<resources></resources>
+<resources>
+    <string name="accessibility_permission">授权无障碍服务（采集与登录）</string>
+    <string name="accessibility_required">授权无障碍服务（%1$d/2 已开启）</string>
+    <string name="accessibility_enabled">无障碍服务已开启（%1$d/2）</string>
+    <string name="accessibility_hint">请开启“AAOS 公众号采集”和“AAOS 微信读书登录”，返回后自动检查。</string>
+</resources>

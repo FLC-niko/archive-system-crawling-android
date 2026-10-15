@@ -4,9 +4,12 @@ Android Automatic Operation Service
 
 Designed by Kokomi 2022
 
-## Topview 当前部署与职责（2026-09-24）
+## Topview 当前部署与职责（2026-10-16）
 
-- 应用 ID：`com.topviewclub.crawling`；当前源码 `versionCode=3`。
+- 权限与环境配置区新增无障碍按钮，显示两项服务的开启数量；点击可进入系统设置，开启“AAOS 公众号采集”和“AAOS 微信读书登录”。未授权公众号无障碍时不会连接任务消费者。
+- 手机已安装 `versionCode=7`。每次进入公众号都会显式选择“文章”页签；发布日期只从独立日期标签提取；列表连续无进展时最多重新进入一次，仍卡住就以 `OFFICIAL_LIST_NO_PROGRESS` 失败返回，不会把卡住误报成采集完成。
+- Windows 旧看门狗已禁用，勿运行旧 `main_program.bat` 或备份副本；业务结果转发使用 `TopviewResultForwarderNoWatchdog`，不要误停。
+- 应用 ID：`com.topviewclub.crawling`；当前源码及已安装产物 `versionCode=7`。
 - 已验证设备：Xiaomi `22041216C`，Android 12 / API 31，USB 序列号 `C6P7HYDY9LYHAQON`。
 - 公众号任务由 AAOS 的 `OfficialOperationService` 通过无障碍完成；点击、滚动、复制链接和返回均不得用 ADB 代替。
 - 微信读书 Web 凭证恢复有两条路线：

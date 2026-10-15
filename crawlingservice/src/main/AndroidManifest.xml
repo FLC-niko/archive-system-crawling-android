@@ -23,6 +23,7 @@
         </service>
         <service
             android:name="com.topviewclub.crawling.service.wechat.weread.WeReadLoginOperationService"
+            android:label="AAOS 微信读书登录"
             android:enabled="true"
             android:exported="true"
             android:foregroundServiceType="specialUse"

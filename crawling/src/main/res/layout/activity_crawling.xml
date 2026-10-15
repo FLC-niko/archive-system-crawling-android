@@ -409,6 +409,33 @@
                     android:paddingVertical="9dp">
 
                     <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_accessibility_permission"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="4dp"
+                        android:gravity="start|center_vertical"
+                        android:paddingVertical="10dp"
+                        android:text="@string/accessibility_permission"
+                        android:textAllCaps="false"
+                        android:textColor="@color/text_primary"
+                        android:textSize="13sp"
+                        app:cornerRadius="10dp"
+                        app:icon="@drawable/ic_accessibility"
+                        app:iconGravity="textStart"
+                        app:iconPadding="10dp"
+                        app:iconTint="@color/md_theme_primary" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginHorizontal="8dp"
+                        android:layout_marginBottom="6dp"
+                        android:text="@string/accessibility_hint"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp" />
+
+                    <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_vpn_permission"
                         style="@style/Widget.Material3.Button.TonalButton"
                         android:layout_width="match_parent"

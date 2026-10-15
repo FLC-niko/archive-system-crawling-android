@@ -41,6 +41,15 @@ internal object OfficialListMotionGate {
 
     fun canStartNextScroll(): Boolean =
         inspectedGeneration == scrollGeneration
+
+    fun generation(): Int = scrollGeneration
+
+    @Synchronized
+    fun reset() {
+        stableAfter = 0L
+        scrollGeneration = 0
+        inspectedGeneration = 0
+    }
 }
 
 class ScrollOfficialList : Action {
@@ -61,6 +70,12 @@ class ScrollOfficialList : Action {
 
     @Volatile
     private var scrollCompleted = false
+
+    override fun reset() {
+        scrolling = false
+        scrollCompleted = false
+        OfficialListMotionGate.reset()
+    }
 
     override fun execute(
         service: AutoOperationService,

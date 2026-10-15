@@ -81,12 +81,13 @@ internal object OfficialPageDetector {
     )
 
     private val DATE_REGEX = Regex(
-        "置顶|今天|昨天|星期[一二三四五六日]|周[一二三四五六日]|(?:\\d{4}年)?\\d{1,2}月\\d{1,2}日"
+        "^(置顶|今天|昨天|星期[一二三四五六日]|周[一二三四五六日]|(?:\\d{4}年)?\\d{1,2}月\\d{1,2}日)" +
+            "(?:\\s*(?:星期|周)[一二三四五六日])?(?:\\s*\\d{1,2}:\\d{2})?$"
     )
 
     fun extractDateOrNull(text: String): Long? {
-        val match = DATE_REGEX.find(text)?.value ?: return null
-        return officialTimeFormat(match.replace("星期", "周"))
+        val match = DATE_REGEX.matchEntire(text.trim())?.groupValues?.get(1) ?: return null
+        return runCatching { officialTimeFormat(match.replace("星期", "周")) }.getOrNull()
     }
 
     fun hasVisibleDates(lines: List<RecognizedScreenLine>): Boolean {

@@ -1,5 +1,7 @@
 package com.topviewclub.crawling.core.ui
 
+import android.accessibilityservice.AccessibilityServiceInfo
+import android.content.ComponentName
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -7,6 +9,7 @@ import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.os.Environment
 import android.provider.Settings
+import android.view.accessibility.AccessibilityManager
 import androidx.activity.result.contract.ActivityResultContracts
 import com.topviewclub.common.bean.TaskStat
 import com.topviewclub.common.log.logI
@@ -19,6 +22,7 @@ import com.topviewclub.common.util.toast
 import com.topviewclub.common.wirebare.prepareProxy
 import com.topviewclub.common.mq.RabbitMQClient
 import com.topviewclub.crawling.core.control.TaskDispatcher
+import com.topviewclub.crawling.core.R
 import com.topviewclub.crawling.core.databinding.ActivityCrawlingBinding
 import org.github.kokomi.wirebare.common.WireBare
 import org.github.kokomi.wirebare.util.Level
@@ -113,6 +117,10 @@ class CrawlingActivity : AppCompatActivity() {
 //                }
             }
 
+            btnAccessibilityPermission.setOnClickListener {
+                openAccessibilitySettings()
+            }
+
             btnAcVideoRoom.setOnClickListener {
                 startActivity(
                     Intent(
@@ -153,6 +161,10 @@ class CrawlingActivity : AppCompatActivity() {
             }
 
             btnStartAaos.setOnClickListener {
+                if (missingAccessibilityServices().isNotEmpty()) {
+                    openAccessibilitySettings()
+                    return@setOnClickListener
+                }
                 btnStartAaos.isEnabled = false
                 TaskDispatcher.init()
                 toast("AAOS 已自动启动，正在等待公众号任务")
@@ -166,6 +178,34 @@ class CrawlingActivity : AppCompatActivity() {
             handleTaskTypeIntent(intent)
         }
 
+    }
+
+    override fun onResume() {
+        super.onResume()
+        val missing = missingAccessibilityServices().size
+        binding.btnAccessibilityPermission.text = getString(
+            if (missing == 0) R.string.accessibility_enabled else R.string.accessibility_required,
+            2 - missing,
+        )
+        if (missing == 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) TaskDispatcher.init()
+    }
+
+    private fun missingAccessibilityServices(): List<String> {
+        val manager = getSystemService(ACCESSIBILITY_SERVICE) as AccessibilityManager
+        val enabled = manager.getEnabledAccessibilityServiceList(
+            AccessibilityServiceInfo.FEEDBACK_ALL_MASK,
+        ).mapNotNull { ComponentName.unflattenFromString(it.id) }.toSet()
+        return listOf(
+            "com.topviewclub.crawling.wechat.official.OfficialOperationService" to "AAOS 公众号采集",
+            "com.topviewclub.crawling.service.wechat.weread.WeReadLoginOperationService" to "AAOS 微信读书登录",
+        ).filter { (className, _) -> ComponentName(packageName, className) !in enabled }
+            .map { it.second }
+    }
+
+    private fun openAccessibilitySettings() {
+        val missing = missingAccessibilityServices()
+        if (missing.isNotEmpty()) toast("请开启：${missing.joinToString("、")}")
+        startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
     }
 
     /**

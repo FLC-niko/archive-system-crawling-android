@@ -11,6 +11,7 @@
             android:exported="false" />
         <service
             android:name=".OfficialOperationService"
+            android:label="AAOS 公众号采集"
             android:enabled="true"
             android:exported="true"
             android:foregroundServiceType="specialUse"
