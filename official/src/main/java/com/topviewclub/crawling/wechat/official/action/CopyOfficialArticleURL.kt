@@ -3,6 +3,7 @@ package com.topviewclub.crawling.wechat.official.action
 import android.view.accessibility.AccessibilityEvent
 import com.topviewclub.crawling.service.AutoOperationService
 import com.topviewclub.crawling.service.action.Action
+import com.topviewclub.crawling.service.action.ActionException
 import com.topviewclub.crawling.service.click
 import com.topviewclub.crawling.service.findNodeOrNull
 import com.topviewclub.crawling.service.back
@@ -18,6 +19,8 @@ class CopyOfficialArticleURL : Action {
         private const val SEARCH_TEXT = "搜索页面内容"
         private const val ITEM_ID = "com.tencent.mm:id/ko8"
         private const val MAX_OCR_MISSES = 3
+        private const val MAX_MENU_REOPEN_ATTEMPTS = 2
+        private const val MAX_RECOGNITION_ATTEMPTS = 9
         private val MENU_MARKERS = listOf(
             "浮窗",
             "搜索页面内容",
@@ -48,19 +51,33 @@ class CopyOfficialArticleURL : Action {
     @Volatile
     private var reopenScheduled = false
 
+    @Volatile
+    private var reopenAttempts = 0
+
+    @Volatile
+    private var pendingFailure: String? = null
+
+    @Volatile
+    private var recognitionAttempts = 0
+
     override fun execute(
         service: AutoOperationService,
         event: AccessibilityEvent
     ): String {
+        val generation = service.currentTaskGeneration()
+        pendingFailure?.let { error ->
+            resetState()
+            throw ActionException(error)
+        }
         if (pendingNext) {
             resetState()
-            service.resumeCurrentAction()
+            service.resumeCurrentAction(generation)
             return "GetOfficialArticleURL"
         }
         if (pendingReopen) {
             pendingReopen = false
             ocrMisses = 0
-            service.resumeCurrentAction()
+            service.resumeCurrentAction(generation)
             return "OpenMoreEnum"
         }
         if (reopenScheduled) return actionName
@@ -94,10 +111,17 @@ class CopyOfficialArticleURL : Action {
             }
         }
         if (!captureInFlight && !copyRequested) {
+            if (recognitionAttempts >= MAX_RECOGNITION_ATTEMPTS) {
+                pendingFailure = "OFFICIAL_COPY_LINK_UNAVAILABLE"
+                service.resumeCurrentAction(generation)
+                return actionName
+            }
+            recognitionAttempts++
             captureInFlight = true
             OfficialScreenReader.recognize(
                 service = service,
                 onSuccess = { lines ->
+                    if (!service.isTaskGenerationActive(generation)) return@recognize
                     val target = lines.firstOrNull {
                         it.text.replace(" ", "").contains(COPY_URL_TEXT)
                     }
@@ -120,6 +144,12 @@ class CopyOfficialArticleURL : Action {
                                 "menu=${lines.joinToString("/") { it.text }}",
                     )
                     if (!dispatched && ocrMisses >= MAX_OCR_MISSES) {
+                        reopenAttempts++
+                        if (reopenAttempts >= MAX_MENU_REOPEN_ATTEMPTS) {
+                            pendingFailure = "OFFICIAL_COPY_LINK_UNAVAILABLE"
+                            service.resumeCurrentAction(generation)
+                            return@recognize
+                        }
                         reopenScheduled = true
                         val menuVisible = lines.any { line ->
                             MENU_MARKERS.any { marker ->
@@ -133,23 +163,27 @@ class CopyOfficialArticleURL : Action {
                             logI(actionName, "复制链接连续未识别，当前为正文，重新打开菜单")
                         }
                         Handler(service.mainLooper).postDelayed({
+                            if (!service.isTaskGenerationActive(generation)) return@postDelayed
                             reopenScheduled = false
                             pendingReopen = true
                             copyRequested = false
-                            service.resumeCurrentAction()
+                            service.resumeCurrentAction(generation)
                         }, if (menuVisible) 500L else 200L)
                         return@recognize
                     }
                     Handler(service.mainLooper).postDelayed({
+                        if (!service.isTaskGenerationActive(generation)) return@postDelayed
                         pendingNext = dispatched
                         copyRequested = false
-                        service.resumeCurrentAction()
+                        service.resumeCurrentAction(generation)
                     }, if (dispatched) 500L else 700L)
                 },
                 onFailure = {
+                    if (!service.isTaskGenerationActive(generation)) return@recognize
                     captureInFlight = false
+                    ocrMisses++
                     Handler(service.mainLooper).postDelayed(
-                        { service.resumeCurrentAction() },
+                        { if (service.isTaskGenerationActive(generation)) service.resumeCurrentAction(generation) },
                         700L,
                     )
                 },
@@ -164,7 +198,12 @@ class CopyOfficialArticleURL : Action {
         pendingNext = false
         pendingReopen = false
         reopenScheduled = false
+        reopenAttempts = 0
+        pendingFailure = null
+        recognitionAttempts = 0
         ocrMisses = 0
     }
+
+    override fun reset() = resetState()
 
 }

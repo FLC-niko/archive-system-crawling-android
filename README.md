@@ -8,6 +8,8 @@ Designed by Kokomi 2022
 
 - 权限与环境配置区新增无障碍按钮，显示两项服务的开启数量；点击可进入系统设置，开启“AAOS 公众号采集”和“AAOS 微信读书登录”。未授权公众号无障碍时不会连接任务消费者。
 - 手机已安装 `versionCode=7`。每次进入公众号都会显式选择“文章”页签；发布日期只从独立日期标签提取；列表连续无进展时最多重新进入一次，仍卡住就以 `OFFICIAL_LIST_NO_PROGRESS` 失败返回，不会把卡住误报成采集完成。
+- 旧协议任务增加失败收口：复制链接 OCR 重试有上限，扫码链接活动最多等待 30 秒，只接受 `mp.weixin.qq.com` 文章链接；任务代际校验会丢弃旧活动的迟到回调。
+- 旧协议死信达到重试上限后，先经 publisher confirm 投递到持久化 `gzh-auto-aaos-review-queue`，再确认原消息；该停车队列不自动消费，需人工检查后决定是否重投。
 - Windows 旧看门狗已禁用，勿运行旧 `main_program.bat` 或备份副本；业务结果转发使用 `TopviewResultForwarderNoWatchdog`，不要误停。
 - 应用 ID：`com.topviewclub.crawling`；当前源码及已安装产物 `versionCode=7`。
 - 已验证设备：Xiaomi `22041216C`，Android 12 / API 31，USB 序列号 `C6P7HYDY9LYHAQON`。

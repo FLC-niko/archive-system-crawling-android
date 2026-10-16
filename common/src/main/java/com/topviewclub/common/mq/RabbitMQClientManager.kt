@@ -516,8 +516,9 @@ class RabbitMQClientManager(
         try {
             val topology = activeTopology
             val retryCount = delivery.retryCount
+            val disposition = rabbitFailureDisposition(topology, delivery.queue, retryCount)
             if (!topology.brokerManagedTopology &&
-                retryCount < MAX_TASK_RETRY &&
+                disposition == RabbitFailureDisposition.RETRY &&
                 TASK_RETRY_DELAY_MS > 0
             ) {
                 delay(TASK_RETRY_DELAY_MS)
@@ -528,7 +529,7 @@ class RabbitMQClientManager(
                 val headers = delivery.headers.toMutableMap().apply {
                     put("x-last-error", error.javaClass.simpleName)
                 }
-                if (retryCount < MAX_TASK_RETRY && topology.taskRetryQueue != null) {
+                if (disposition == RabbitFailureDisposition.RETRY && topology.taskRetryQueue != null) {
                     headers["x-retry-count"] = retryCount + 1
                     val retryExchange = topology.retryExchange ?: topology.exchange
                     val retryRoutingKey = topology.taskRetryRoutingKey ?: topology.taskRetryQueue
@@ -543,7 +544,7 @@ class RabbitMQClientManager(
                     )
                     acknowledgeLocked(delivery)
                     logRabbit("queue=${delivery.queue} 已安排第 ${retryCount + 1} 次重试")
-                } else if (retryCount < MAX_TASK_RETRY) {
+                } else if (disposition == RabbitFailureDisposition.RETRY) {
                     headers["x-retry-count"] = retryCount + 1
                     publishAndConfirm(
                         channel = channel,
@@ -556,6 +557,27 @@ class RabbitMQClientManager(
                     )
                     acknowledgeLocked(delivery)
                     logRabbit("queue=${delivery.queue} 已安排第 ${retryCount + 1} 次重试")
+                } else if (disposition == RabbitFailureDisposition.PARK) {
+                    headers["x-original-queue"] = headers["x-original-queue"] ?: delivery.queue
+                    headers["x-aaos-parked"] = true
+                    headers["x-aaos-park-reason"] = "fallback-retries-exhausted"
+                    val parkingChannel = publishChannel?.takeIf { it.isOpen }
+                        ?: throw IOException("RabbitMQ publish channel 不可用，无法停车失败消息")
+                    parkingChannel.queueDeclare(AAOS_REVIEW_QUEUE, true, false, false, null)
+                    publishAndConfirm(
+                        channel = parkingChannel,
+                        exchange = "",
+                        exchangeType = "direct",
+                        routingKey = AAOS_REVIEW_QUEUE,
+                        properties = delivery.delivery.properties.builder()
+                            .headers(headers)
+                            .deliveryMode(2)
+                            .build(),
+                        body = delivery.body,
+                        declareExchange = false,
+                    )
+                    acknowledgeLocked(delivery)
+                    logRabbit("queue=${delivery.queue} 兜底重试耗尽，消息已停车到 $AAOS_REVIEW_QUEUE")
                 } else {
                     headers["x-original-queue"] = delivery.queue
                     publishAndConfirm(

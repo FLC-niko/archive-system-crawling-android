@@ -31,6 +31,7 @@ const val GZH_ATD_QUEUE = "gzh-auto-ATD-queue"
 const val GZH_ATD_ROUTING_KEY = "gzh-auto-ATD-routing"
 const val DEAD_MESSAGE_QUEUE = "dead-message-queue"
 const val DEAD_MESSAGE_ROUTING_KEY = "dead-message-routing"
+const val AAOS_REVIEW_QUEUE = "gzh-auto-aaos-review-queue"
 const val SERVER_STATUS_QUEUE = "server.queue.provideLog"
 
 /** 一个 vhost 的真实业务拓扑。xdag 的整套拓扑由 broker 管理。 */

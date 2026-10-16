@@ -49,9 +49,9 @@ abstract class AutoOperationService : AccessibilityService() {
          * RabbitMQ 任务可能在微信静止且没有新无障碍事件时到达。主动唤醒已连接
          * 的对应服务，让它读取 TaskStat 并开始责任链。
          */
-        fun wakeServiceForTask(taskType: String): Boolean {
+        fun wakeServiceForTask(taskType: String, expectedGeneration: Long? = null): Boolean {
             val service = connectedServices[taskType]?.get() ?: return false
-            service.wakeForCurrentTask()
+            service.wakeForCurrentTask(expectedGeneration)
             return true
         }
     }
@@ -168,6 +168,10 @@ abstract class AutoOperationService : AccessibilityService() {
     private var taskInitialized = false
     private var activeTask: AAOSTask? = null
 
+    /** Prevent delayed callbacks from an earlier task from waking a later task. */
+    @Volatile
+    private var taskGeneration: Long = 0L
+
     /**
      * 标志服务是否正常退出，若没有正常退出，则该值为 false
      * */
@@ -257,14 +261,15 @@ abstract class AutoOperationService : AccessibilityService() {
     }
 
     private fun updateTaskStat(result: ServiceResult) {
+        val completedTask = activeTask ?: aaosTask
         if (result is ServiceResult.Completed) {
             TaskStat.successfulTaskList.value!!.let {
-                it.add(aaosTask)
+                it.add(completedTask)
                 TaskStat.successfulTaskList.value = it
             }
         }
         TaskStat.completedTaskList.value!!.let {
-            it.add(aaosTask)
+            it.add(completedTask)
             TaskStat.completedTaskList.value = it
         }
         TaskStat.successfulRate.value =
@@ -329,6 +334,7 @@ abstract class AutoOperationService : AccessibilityService() {
         val task = TaskStat.processingTask
         if (task.type != crawlServiceType) return false
 
+        taskGeneration += 1L
         activeTask = task
         addActions()
         // 复用动作实例前清空上一次任务遗留的失败计数与页面状态，避免连锁失败。
@@ -344,8 +350,9 @@ abstract class AutoOperationService : AccessibilityService() {
         return true
     }
 
-    private fun wakeForCurrentTask() {
+    private fun wakeForCurrentTask(expectedGeneration: Long? = null) {
         Handler(mainLooper).post {
+            if (expectedGeneration != null && !isTaskGenerationActive(expectedGeneration)) return@post
             if (!initializeForCurrentTask()) return@post
             dispatchSyntheticEvent()
             logI(
@@ -361,6 +368,18 @@ abstract class AutoOperationService : AccessibilityService() {
             if (taskInitialized) dispatchSyntheticEvent()
         }
     }
+
+    /** 带任务代际校验的异步续跑入口，迟到的回调不能推进下一条任务。 */
+    fun resumeCurrentAction(expectedGeneration: Long) {
+        Handler(mainLooper).post {
+            if (isTaskGenerationActive(expectedGeneration)) dispatchSyntheticEvent()
+        }
+    }
+
+    fun currentTaskGeneration(): Long = taskGeneration
+
+    fun isTaskGenerationActive(expectedGeneration: Long): Boolean =
+        taskInitialized && taskGeneration == expectedGeneration
 
     private fun dispatchSyntheticEvent() {
         val currentRoot = rootInActiveWindow
